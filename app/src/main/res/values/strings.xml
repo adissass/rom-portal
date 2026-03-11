@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">RomPortal</string>
+    <string name="pick_folder">Pick Folder</string>
+    <string name="server_stopped">Server stopped</string>
 </resources>
