@@ -3,7 +3,6 @@ package com.romportal.app
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,7 +36,7 @@ class MainActivity : ComponentActivity() {
     private var serverState by mutableStateOf<ServerState?>(null)
     private var serverError by mutableStateOf<String?>(null)
 
-    private val romPortalServer = RomPortalServer()
+    private lateinit var romPortalServer: RomPortalServer
 
     private val pickFolderLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
@@ -57,6 +56,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         selectedRootUri = readSelectedRootUri()
+        romPortalServer = RomPortalServer(
+            context = applicationContext,
+            contentResolver = contentResolver,
+            rootUriProvider = { selectedRootUri }
+        )
 
         setContent {
             MaterialTheme {
@@ -90,7 +94,9 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         // MVP policy: server is foreground-only while app is open.
-        romPortalServer.stop()
+        if (::romPortalServer.isInitialized) {
+            romPortalServer.stop()
+        }
         serverState = null
     }
 
@@ -161,10 +167,12 @@ internal fun formatRootLabel(uriString: String?): String {
     if (uriString.isNullOrBlank()) return "No folder selected"
 
     return try {
-        val uri = Uri.parse(uriString)
-        val treeDocId = DocumentsContract.getTreeDocumentId(uri)
-        val label = treeDocId.substringAfter(':', treeDocId)
-        "Selected folder: $label"
+        val decoded = Uri.decode(uriString)
+        val treePart = decoded.substringAfter("/tree/", "")
+        val treeDocId = treePart.substringBefore("/")
+        val label = if (treeDocId.isBlank()) decoded else treeDocId
+        val cleanLabel = label.substringAfter(':', label)
+        "Selected folder: $cleanLabel"
     } catch (_: Exception) {
         "Selected folder"
     }
