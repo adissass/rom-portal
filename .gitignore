@@ -1,2 +1,23 @@
-.DS_STORE
-docs/ 
+# macOS
+.DS_Store
+docs/
+
+# Gradle
+.gradle/
+.gradle-home/
+build/
+*/build/
+
+# Android Studio
+.idea/
+local.properties
+*.iml
+captures/
+
+# Kotlin
+*.class
+
+# Generated
+app/release/
+app/debug/
+cookies.txt

@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">RomPortal</string>
+    <string name="pick_folder">Pick Folder</string>
+    <string name="server_stopped">Server stopped</string>
+    <string name="start_server">Start Server</string>
+    <string name="stop_server">Stop Server</string>
+    <string name="server_url_prefix">Server URL: %1$s</string>
+    <string name="server_pin_prefix">PIN: %1$s</string>
+    <string name="no_folder_selected">No folder selected</string>
+    <string name="selected_folder_prefix">Selected folder: %1$s</string>
+    <string name="selected_folder_generic">Selected folder</string>
+</resources>
