@@ -26,12 +26,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.romportal.app.server.RomPortalServer
+import com.romportal.app.server.ServerState
 
 private const val PREFS_NAME = "romportal_prefs"
 private const val KEY_ROOT_URI = "selected_root_uri"
 
 class MainActivity : ComponentActivity() {
     private var selectedRootUri by mutableStateOf<String?>(null)
+    private var serverState by mutableStateOf<ServerState?>(null)
+    private var serverError by mutableStateOf<String?>(null)
+
+    private val romPortalServer = RomPortalServer()
 
     private val pickFolderLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
@@ -57,11 +63,35 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     RomPortalHome(
                         selectedRootUri = selectedRootUri,
-                        onPickFolder = { pickFolderLauncher.launch(null) }
+                        serverState = serverState,
+                        serverError = serverError,
+                        onPickFolder = { pickFolderLauncher.launch(null) },
+                        onToggleServer = {
+                            if (serverState == null) {
+                                try {
+                                    serverState = romPortalServer.start()
+                                    serverError = null
+                                } catch (e: Exception) {
+                                    serverState = null
+                                    serverError = e.message ?: "Failed to start server"
+                                }
+                            } else {
+                                romPortalServer.stop()
+                                serverState = null
+                                serverError = null
+                            }
+                        }
                     )
                 }
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // MVP policy: server is foreground-only while app is open.
+        romPortalServer.stop()
+        serverState = null
     }
 
     private fun saveSelectedRootUri(uri: String) {
@@ -79,7 +109,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun RomPortalHome(
     selectedRootUri: String?,
-    onPickFolder: () -> Unit
+    serverState: ServerState?,
+    serverError: String?,
+    onPickFolder: () -> Unit,
+    onToggleServer: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -94,10 +127,32 @@ private fun RomPortalHome(
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
-        Text(text = stringResource(R.string.server_stopped), style = MaterialTheme.typography.bodyLarge)
+
+        if (serverState == null) {
+            Text(text = stringResource(R.string.server_stopped), style = MaterialTheme.typography.bodyLarge)
+        } else {
+            Text(
+                text = stringResource(R.string.server_url_prefix, serverState.lanUrl),
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = stringResource(R.string.server_pin_prefix, serverState.pin),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        if (!serverError.isNullOrBlank()) {
+            Text(text = serverError, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onPickFolder) {
             Text(text = stringResource(R.string.pick_folder))
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(onClick = onToggleServer) {
+            Text(text = if (serverState == null) stringResource(R.string.start_server) else stringResource(R.string.stop_server))
         }
     }
 }
