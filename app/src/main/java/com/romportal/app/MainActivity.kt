@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.romportal.app.server.RomPortalServer
 import com.romportal.app.server.ServerState
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 private const val PREFS_NAME = "romportal_prefs"
 private const val KEY_ROOT_URI = "selected_root_uri"
@@ -167,11 +169,17 @@ internal fun formatRootLabel(uriString: String?): String {
     if (uriString.isNullOrBlank()) return "No folder selected"
 
     return try {
-        val decoded = Uri.decode(uriString)
+        val decoded = URLDecoder.decode(uriString, StandardCharsets.UTF_8.name())
+        if (!decoded.contains("/tree/")) {
+            return "Selected folder"
+        }
         val treePart = decoded.substringAfter("/tree/", "")
         val treeDocId = treePart.substringBefore("/")
         val label = if (treeDocId.isBlank()) decoded else treeDocId
         val cleanLabel = label.substringAfter(':', label)
+        if (cleanLabel.isBlank()) {
+            return "Selected folder"
+        }
         "Selected folder: $cleanLabel"
     } catch (_: Exception) {
         "Selected folder"
