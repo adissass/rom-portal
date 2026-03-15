@@ -65,9 +65,11 @@ dependencies {
 
     implementation("io.ktor:ktor-server-core:2.3.12")
     implementation("io.ktor:ktor-server-cio:2.3.12")
-    implementation("org.slf4j:slf4j-android:1.7.36")
+    runtimeOnly("org.slf4j:slf4j-android:1.7.36")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("io.ktor:ktor-server-test-host:2.3.12")
+    testRuntimeOnly("org.slf4j:slf4j-simple:1.7.36")
 
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")

@@ -1,0 +1,250 @@
+package com.romportal.app.server
+
+import io.ktor.client.request.forms.FormDataContent
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.Parameters
+import io.ktor.server.testing.testApplication
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.ByteArrayInputStream
+
+class RomPortalApiIntegrationTest {
+    @Test
+    fun authAndFileOps_happyPath() = testApplication {
+        val fakeFileOps = FakeFileOpsGateway()
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "123456",
+                    authManager = AuthManager(),
+                    fileOps = fakeFileOps,
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val unauthList = client.get("/api/list?path=")
+        assertEquals(HttpStatusCode.Unauthorized, unauthList.status)
+
+        val loginResponse = client.post("/login") {
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("pin", "123456") }))
+        }
+        assertEquals(HttpStatusCode.OK, loginResponse.status)
+
+        val cookie = loginResponse.headers[HttpHeaders.SetCookie]
+            ?.substringBefore(';')
+            ?: error("missing auth cookie")
+
+        val mkdirResponse = client.post("/api/mkdir") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("path", "TestDir") }))
+        }
+        assertEquals(HttpStatusCode.OK, mkdirResponse.status)
+
+        val renameResponse = client.post("/api/rename") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("path", "TestDir")
+                        append("newName", "TestDir2")
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.OK, renameResponse.status)
+
+        val deleteResponse = client.post("/api/delete") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("path", "TestDir2") }))
+        }
+        assertEquals(HttpStatusCode.OK, deleteResponse.status)
+
+        val uploadResponse = client.post("/api/upload?path=") {
+            header(HttpHeaders.Cookie, cookie)
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            key = "file",
+                            value = "hello".toByteArray(),
+                            headers = Headers.build {
+                                append(HttpHeaders.ContentDisposition, "form-data; name=\"file\"; filename=\"hello.txt\"")
+                                append(HttpHeaders.ContentType, "text/plain")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.OK, uploadResponse.status)
+
+        val downloadResponse = client.get("/api/download?path=hello.txt") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.OK, downloadResponse.status)
+        assertEquals("hello", downloadResponse.bodyAsText())
+
+        val authedList = client.get("/api/list?path=") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.OK, authedList.status)
+        assertTrue(authedList.bodyAsText().contains("hello.txt"))
+    }
+}
+
+private class FakeFileOpsGateway : FileOpsGateway {
+    private val directories = linkedSetOf("")
+    private val files = linkedMapOf<String, ByteArray>()
+
+    override fun list(path: String?): Result<List<EntryInfo>> = runCatchingApi {
+        val normalized = normalize(path)
+        if (!directories.contains(normalized)) {
+            throw FileApiException(HttpStatusCode.NotFound, "Path not found")
+        }
+
+        val entries = mutableListOf<EntryInfo>()
+        val childDirs = directories
+            .filter { it.isNotBlank() && parentOf(it) == normalized }
+            .map { it.substringAfterLast('/') }
+            .sorted()
+            .map { EntryInfo(name = it, isDirectory = true, sizeBytes = 0) }
+
+        val childFiles = files.keys
+            .filter { parentOf(it) == normalized }
+            .map { pathKey ->
+                val name = pathKey.substringAfterLast('/')
+                EntryInfo(name = name, isDirectory = false, sizeBytes = files[pathKey]?.size?.toLong() ?: 0)
+            }
+            .sortedBy { it.name }
+
+        entries += childDirs
+        entries += childFiles
+        entries
+    }
+
+    override fun mkdir(path: String): Result<Unit> = runCatchingApi {
+        val segments = normalizePathSegments(path)
+        var current = ""
+        for (segment in segments) {
+            current = join(current, segment)
+            directories.add(current)
+        }
+    }
+
+    override fun rename(path: String, newName: String): Result<Unit> = runCatchingApi {
+        val source = normalize(path)
+        val parent = parentOf(source)
+        val target = join(parent, newName.trim())
+
+        if (directories.contains(source)) {
+            if (directories.contains(target) || files.containsKey(target)) {
+                throw FileApiException(HttpStatusCode.Conflict, "Target already exists")
+            }
+            val oldDirs = directories.filter { it == source || it.startsWith("$source/") }
+            val oldFiles = files.keys.filter { it.startsWith("$source/") }
+
+            for (dir in oldDirs) directories.remove(dir)
+            val dirMappings = oldDirs.associateWith { it.replaceFirst(source, target) }
+            directories.addAll(dirMappings.values)
+
+            val fileMappings = oldFiles.associateWith { it.replaceFirst(source, target) }
+            for ((oldPath, newPath) in fileMappings) {
+                val bytes = files.remove(oldPath) ?: continue
+                files[newPath] = bytes
+            }
+            return@runCatchingApi
+        }
+
+        val payload = files.remove(source)
+            ?: throw FileApiException(HttpStatusCode.NotFound, "Path not found")
+        if (files.containsKey(target) || directories.contains(target)) {
+            files[source] = payload
+            throw FileApiException(HttpStatusCode.Conflict, "Target already exists")
+        }
+        files[target] = payload
+    }
+
+    override fun delete(path: String): Result<Unit> = runCatchingApi {
+        val normalized = normalize(path)
+        if (files.remove(normalized) != null) return@runCatchingApi
+
+        if (!directories.contains(normalized)) {
+            throw FileApiException(HttpStatusCode.NotFound, "Path not found")
+        }
+
+        val dirsToRemove = directories.filter { it == normalized || it.startsWith("$normalized/") }
+        val filesToRemove = files.keys.filter { it.startsWith("$normalized/") }
+        dirsToRemove.forEach { directories.remove(it) }
+        filesToRemove.forEach { files.remove(it) }
+    }
+
+    override fun openDownload(path: String): Result<Pair<String, java.io.InputStream>> = runCatchingApi {
+        val normalized = normalize(path)
+        val bytes = files[normalized] ?: throw FileApiException(HttpStatusCode.NotFound, "Path not found")
+        val name = normalized.substringAfterLast('/')
+        Pair(name, ByteArrayInputStream(bytes))
+    }
+
+    override fun upload(
+        destinationPath: String?,
+        filename: String,
+        input: java.io.InputStream,
+        contentLength: Long?
+    ): Result<Unit> = runCatchingApi {
+        val dir = normalize(destinationPath)
+        if (!directories.contains(dir)) {
+            throw FileApiException(HttpStatusCode.NotFound, "Destination not found")
+        }
+
+        val target = join(dir, filename)
+        if (files.containsKey(target) || directories.contains(target)) {
+            throw FileApiException(HttpStatusCode.Conflict, "File already exists")
+        }
+
+        val bytes = input.readBytes()
+        if (contentLength != null && contentLength != bytes.size.toLong()) {
+            throw FileApiException(HttpStatusCode.BadRequest, "Partial upload detected")
+        }
+        files[target] = bytes
+    }
+
+    private fun normalize(path: String?): String {
+        val segments = normalizePathSegments(path)
+        return segments.joinToString("/")
+    }
+
+    private fun join(parent: String, name: String): String {
+        if (parent.isBlank()) return name
+        return "$parent/$name"
+    }
+
+    private fun parentOf(path: String): String {
+        if (!path.contains('/')) return ""
+        return path.substringBeforeLast('/')
+    }
+
+    private inline fun <T> runCatchingApi(block: () -> T): Result<T> {
+        return try {
+            Result.success(block())
+        } catch (e: FileApiException) {
+            Result.failure(e)
+        }
+    }
+}

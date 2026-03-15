@@ -21,8 +21,8 @@ internal class FileOpsService(
     private val contentResolver: ContentResolver,
     private val rootUriProvider: () -> String?,
     private val maxUploadBytes: Long? = null
-) {
-    fun list(path: String?): Result<List<EntryInfo>> = runCatchingApi {
+) : FileOpsGateway {
+    override fun list(path: String?): Result<List<EntryInfo>> = runCatchingApi {
         val directory = resolveExisting(path, mustBeDirectory = true)
         directory.listFiles().map { doc ->
             EntryInfo(
@@ -33,7 +33,7 @@ internal class FileOpsService(
         }.sortedWith(compareBy<EntryInfo> { !it.isDirectory }.thenBy { it.name.lowercase() })
     }
 
-    fun mkdir(path: String): Result<Unit> = runCatchingApi {
+    override fun mkdir(path: String): Result<Unit> = runCatchingApi {
         val normalized = normalizePathSegments(path)
         val root = getRootDirectory()
         var current = root
@@ -49,14 +49,14 @@ internal class FileOpsService(
         }
     }
 
-    fun delete(path: String): Result<Unit> = runCatchingApi {
+    override fun delete(path: String): Result<Unit> = runCatchingApi {
         val target = resolveExisting(path, mustBeDirectory = null)
         if (!target.delete()) {
             throw FileApiException(HttpStatusCode.InternalServerError, "Failed to delete entry")
         }
     }
 
-    fun rename(path: String, newName: String): Result<Unit> = runCatchingApi {
+    override fun rename(path: String, newName: String): Result<Unit> = runCatchingApi {
         val safeName = normalizeName(newName)
         val target = resolveExisting(path, mustBeDirectory = null)
         val parent = resolveParent(path)
@@ -70,7 +70,7 @@ internal class FileOpsService(
         }
     }
 
-    fun openDownload(path: String): Result<Pair<String, java.io.InputStream>> = runCatchingApi {
+    override fun openDownload(path: String): Result<Pair<String, java.io.InputStream>> = runCatchingApi {
         val file = resolveExisting(path, mustBeDirectory = false)
         val name = file.name ?: "download.bin"
         val input = contentResolver.openInputStream(file.uri)
@@ -78,7 +78,7 @@ internal class FileOpsService(
         Pair(name, input)
     }
 
-    fun upload(destinationPath: String?, filename: String, input: java.io.InputStream, contentLength: Long?): Result<Unit> = runCatchingApi {
+    override fun upload(destinationPath: String?, filename: String, input: java.io.InputStream, contentLength: Long?): Result<Unit> = runCatchingApi {
         val safeFilename = normalizeName(filename)
         val destinationDir = resolveExisting(destinationPath, mustBeDirectory = true)
 
