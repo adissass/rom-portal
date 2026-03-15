@@ -166,6 +166,84 @@ class RomPortalApiIntegrationTest {
         assertEquals(payload.size, downloaded.size)
         assertTrue(payload.contentEquals(downloaded))
     }
+
+    @Test
+    fun negativePaths_enforceAuthAndValidation() = testApplication {
+        val fakeFileOps = FakeFileOpsGateway()
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "111111",
+                    authManager = AuthManager(),
+                    fileOps = fakeFileOps,
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val unauth = client.get("/api/list?path=")
+        assertEquals(HttpStatusCode.Unauthorized, unauth.status)
+
+        val loginResponse = client.post("/login") {
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("pin", "111111") }))
+        }
+        assertEquals(HttpStatusCode.OK, loginResponse.status)
+        val cookie = loginResponse.headers[HttpHeaders.SetCookie]
+            ?.substringBefore(';')
+            ?: error("missing auth cookie")
+
+        val traversal = client.get("/api/list?path=../") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.BadRequest, traversal.status)
+
+        val mkdirA = client.post("/api/mkdir") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("path", "A") }))
+        }
+        assertEquals(HttpStatusCode.OK, mkdirA.status)
+
+        val mkdirB = client.post("/api/mkdir") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("path", "B") }))
+        }
+        assertEquals(HttpStatusCode.OK, mkdirB.status)
+
+        val renameConflict = client.post("/api/rename") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("path", "A")
+                        append("newName", "B")
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.Conflict, renameConflict.status)
+
+        val missingDownload = client.get("/api/download?path=missing.bin") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.NotFound, missingDownload.status)
+
+        val uploadWithoutFilePart = client.post("/api/upload?path=") {
+            header(HttpHeaders.Cookie, cookie)
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("note", "no file attached")
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.BadRequest, uploadWithoutFilePart.status)
+    }
 }
 
 private class FakeFileOpsGateway : FileOpsGateway {
