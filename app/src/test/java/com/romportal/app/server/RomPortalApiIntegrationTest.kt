@@ -8,6 +8,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.call.body
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
@@ -18,6 +19,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import kotlin.random.Random
 
 class RomPortalApiIntegrationTest {
     @Test
@@ -106,6 +108,63 @@ class RomPortalApiIntegrationTest {
         }
         assertEquals(HttpStatusCode.OK, authedList.status)
         assertTrue(authedList.bodyAsText().contains("hello.txt"))
+    }
+
+    @Test
+    fun uploadDownload_preservesBytesExactly() = testApplication {
+        val fakeFileOps = FakeFileOpsGateway()
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "987654",
+                    authManager = AuthManager(),
+                    fileOps = fakeFileOps,
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val loginResponse = client.post("/login") {
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("pin", "987654") }))
+        }
+        assertEquals(HttpStatusCode.OK, loginResponse.status)
+
+        val cookie = loginResponse.headers[HttpHeaders.SetCookie]
+            ?.substringBefore(';')
+            ?: error("missing auth cookie")
+
+        val payload = ByteArray(4096)
+        Random(1337).nextBytes(payload)
+
+        val uploadResponse = client.post("/api/upload?path=") {
+            header(HttpHeaders.Cookie, cookie)
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            key = "file",
+                            value = payload,
+                            headers = Headers.build {
+                                append(HttpHeaders.ContentDisposition, "form-data; name=\"file\"; filename=\"payload.bin\"")
+                                append(HttpHeaders.ContentType, "application/octet-stream")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.OK, uploadResponse.status)
+
+        val downloadResponse = client.get("/api/download?path=payload.bin") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.OK, downloadResponse.status)
+
+        val downloaded = downloadResponse.body<ByteArray>()
+        assertEquals(payload.size, downloaded.size)
+        assertTrue(payload.contentEquals(downloaded))
     }
 }
 
