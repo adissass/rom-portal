@@ -311,6 +311,45 @@ class RomPortalApiIntegrationTest {
         assertTrue(body.contains("\"freeSpaceBytes\":null"))
         assertTrue(body.contains("\"activeSessions\":2"))
     }
+
+    @Test
+    fun health_setsRequestIdHeader_andRotatesPerRequest() = testApplication {
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "456456",
+                    authManager = AuthManager(),
+                    fileOps = FakeFileOpsGateway(),
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            status = "ok",
+                            serverStartedAtEpochMs = 10_000,
+                            uptimeMs = 100,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val first = client.get("/health")
+        val second = client.get("/health")
+
+        assertEquals(HttpStatusCode.OK, first.status)
+        assertEquals(HttpStatusCode.OK, second.status)
+
+        val firstRequestId = first.headers[HttpHeaders.XRequestId]
+        val secondRequestId = second.headers[HttpHeaders.XRequestId]
+
+        assertTrue(!firstRequestId.isNullOrBlank())
+        assertTrue(!secondRequestId.isNullOrBlank())
+        assertTrue(firstRequestId != secondRequestId)
+    }
 }
 
 private class FakeFileOpsGateway : FileOpsGateway {
