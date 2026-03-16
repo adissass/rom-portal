@@ -9,6 +9,7 @@ import io.ktor.http.content.forEachPart
 import io.ktor.http.content.streamProvider
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.request.receiveParameters
 import io.ktor.server.response.header
@@ -40,6 +41,8 @@ internal data class HealthSnapshot(
 )
 
 internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) {
+    install(RequestLoggingPlugin)
+
     routing {
         get("/health") {
             call.respondText(
