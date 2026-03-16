@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,20 +26,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.romportal.app.server.RomPortalServer
+import androidx.compose.runtime.collectAsState
+import com.romportal.app.service.RomPortalForegroundService
+import com.romportal.app.service.ServiceConfig
+import com.romportal.app.service.ServiceRuntimeStore
 import com.romportal.app.server.ServerState
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
-private const val PREFS_NAME = "romportal_prefs"
-private const val KEY_ROOT_URI = "selected_root_uri"
-
 class MainActivity : ComponentActivity() {
     private var selectedRootUri by mutableStateOf<String?>(null)
-    private var serverState by mutableStateOf<ServerState?>(null)
-    private var serverError by mutableStateOf<String?>(null)
-
-    private lateinit var romPortalServer: RomPortalServer
+    private var localError by mutableStateOf<String?>(null)
 
     private val pickFolderLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
@@ -58,33 +56,32 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         selectedRootUri = readSelectedRootUri()
-        romPortalServer = RomPortalServer(
-            context = applicationContext,
-            contentResolver = contentResolver,
-            rootUriProvider = { selectedRootUri }
-        )
 
         setContent {
+            val serverState by ServiceRuntimeStore.serverState.collectAsState()
+            val serviceError by ServiceRuntimeStore.serverError.collectAsState()
+
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     RomPortalHome(
                         selectedRootUri = selectedRootUri,
                         serverState = serverState,
-                        serverError = serverError,
+                        serverError = localError ?: serviceError,
                         onPickFolder = { pickFolderLauncher.launch(null) },
                         onToggleServer = {
                             if (serverState == null) {
-                                try {
-                                    serverState = romPortalServer.start()
-                                    serverError = null
-                                } catch (e: Exception) {
-                                    serverState = null
-                                    serverError = e.message ?: "Failed to start server"
+                                if (selectedRootUri.isNullOrBlank()) {
+                                    localError = getString(R.string.error_select_folder_first)
+                                } else {
+                                    localError = null
+                                    ContextCompat.startForegroundService(
+                                        this@MainActivity,
+                                        RomPortalForegroundService.startIntent(this@MainActivity)
+                                    )
                                 }
                             } else {
-                                romPortalServer.stop()
-                                serverState = null
-                                serverError = null
+                                localError = null
+                                startService(RomPortalForegroundService.stopIntent(this@MainActivity))
                             }
                         }
                     )
@@ -93,24 +90,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        // MVP policy: server is foreground-only while app is open.
-        if (::romPortalServer.isInitialized) {
-            romPortalServer.stop()
-        }
-        serverState = null
-    }
-
     private fun saveSelectedRootUri(uri: String) {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        getSharedPreferences(ServiceConfig.PREFS_NAME, MODE_PRIVATE)
             .edit()
-            .putString(KEY_ROOT_URI, uri)
+            .putString(ServiceConfig.KEY_ROOT_URI, uri)
             .apply()
     }
 
     private fun readSelectedRootUri(): String? {
-        return getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_ROOT_URI, null)
+        return getSharedPreferences(ServiceConfig.PREFS_NAME, MODE_PRIVATE)
+            .getString(ServiceConfig.KEY_ROOT_URI, null)
     }
 }
 

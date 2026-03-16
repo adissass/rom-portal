@@ -9,4 +9,11 @@
     <string name="no_folder_selected">No folder selected</string>
     <string name="selected_folder_prefix">Selected folder: %1$s</string>
     <string name="selected_folder_generic">Selected folder</string>
+    <string name="notification_channel_name">RomPortal Server</string>
+    <string name="notification_title">RomPortal server running</string>
+    <string name="notification_body">%1$s • PIN %2$s</string>
+    <string name="notification_starting">Starting server…</string>
+    <string name="notification_keep_alive">Keep Alive</string>
+    <string name="notification_stop_now">Stop Now</string>
+    <string name="error_select_folder_first">Select a folder before starting server</string>
 </resources>
