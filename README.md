@@ -136,6 +136,7 @@ Authenticated (`rs_session` cookie required):
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
+./gradlew :app:ktlintKotlinScriptCheck
 ```
 
 ### Operability checks
