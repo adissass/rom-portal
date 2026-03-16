@@ -451,6 +451,53 @@ class RomPortalApiIntegrationTest {
         }
         assertEquals(HttpStatusCode.Unauthorized, expiredByInactivity.status)
     }
+
+    @Test
+    fun invalidOrMissingSessionCookie_returns401AcrossApiEndpoints() = testApplication {
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "654321",
+                    authManager = AuthManager(),
+                    fileOps = FakeFileOpsGateway(),
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            status = "ok",
+                            serverStartedAtEpochMs = 10_000,
+                            uptimeMs = 100,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val unauthorizedCookies = listOf<String?>(null, "bad=1", "rs_session=invalid-token")
+
+        unauthorizedCookies.forEach { cookie ->
+            val listResponse = client.get("/api/list?path=") {
+                cookie?.let { header(HttpHeaders.Cookie, it) }
+            }
+            assertEquals(HttpStatusCode.Unauthorized, listResponse.status)
+
+            val mkdirResponse = client.post("/api/mkdir") {
+                cookie?.let { header(HttpHeaders.Cookie, it) }
+                header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+                setBody(FormDataContent(Parameters.build { append("path", "Tmp") }))
+            }
+            assertEquals(HttpStatusCode.Unauthorized, mkdirResponse.status)
+
+            val downloadResponse = client.get("/api/download?path=missing.bin") {
+                cookie?.let { header(HttpHeaders.Cookie, it) }
+            }
+            assertEquals(HttpStatusCode.Unauthorized, downloadResponse.status)
+        }
+    }
 }
 
 private class FakeFileOpsGateway : FileOpsGateway {
