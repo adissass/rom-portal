@@ -174,10 +174,11 @@ Expected highlights:
 Fill in after test runs:
 
 Transfer speed test:
-- file size:
-- upload time:
-- download time:
-- measured throughput:
+- date: March 15, 2026
+- file size: 100 MiB (104,857,600 bytes)
+- upload: HTTP 200, 7.623 s, 13,773,752 B/s (~13.14 MiB/s)
+- download: HTTP 200, 2.670 s, 39,399,709 B/s (~37.57 MiB/s)
+- integrity: SHA-256 match (`IDENTICAL`)
 
 Hotspot test:
 - topology (phone/emulator/laptop):
