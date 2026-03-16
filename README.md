@@ -182,6 +182,11 @@ Transfer speed test:
 - integrity: SHA-256 match (`IDENTICAL`)
 
 Hotspot test:
-- topology (phone/emulator/laptop):
-- result (pass/fail):
-- notes:
+- date: March 16, 2026
+- topology: physical Android phone hotspot (`10.0.0.220`) + laptop client via Wi-Fi hotspot
+- result: pass
+- endpoint checks:
+  - `GET /health` -> HTTP 200
+  - `POST /login` -> HTTP 200
+  - `GET /api/list?path=` (authenticated) -> HTTP 200
+- notes: browser/API connectivity over hotspot is working with PIN auth and session cookie flow
