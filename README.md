@@ -138,6 +138,23 @@ Authenticated (`rs_session` cookie required):
 ./gradlew :app:testDebugUnitTest
 ```
 
+### Operability checks
+Verify `/health` and `X-Request-ID`:
+```bash
+curl -i --http1.1 http://127.0.0.1:8080/health
+curl -i --http1.1 http://127.0.0.1:8080/health | rg -i "x-request-id"
+```
+
+View RomPortal structured request logs only:
+```bash
+adb logcat --pid $(adb shell pidof -s com.romportal.app) | rg "requestId=|request logging|Exception|error"
+```
+
+Expected structured line shape:
+```text
+requestId=<uuid> method=GET path=/health status=200 latencyMs=<ms> bytesIn=<n|-1> bytesOut=<n|-1>
+```
+
 ### Runtime smoke test (curl)
 ```bash
 curl -i -c cookies.txt -d "pin=YOUR_PIN" http://127.0.0.1:8080/login
@@ -152,3 +169,17 @@ curl -i -b cookies.txt "http://127.0.0.1:8080/api/list?path=../"
 Expected highlights:
 - unauthenticated `/api/*` -> `401`
 - traversal path input -> `400`
+
+### Validation results template
+Fill in after test runs:
+
+Transfer speed test:
+- file size:
+- upload time:
+- download time:
+- measured throughput:
+
+Hotspot test:
+- topology (phone/emulator/laptop):
+- result (pass/fail):
+- notes:
