@@ -40,6 +40,8 @@ internal class AuthManager(
         failedAttemptsByKey.clear()
     }
 
+    fun activeSessionCount(): Int = sessions.size
+
     fun login(pinInput: String, expectedPin: String, attemptKey: String, nowMs: Long): LoginResult {
         val attemptState = failedAttemptsByKey[attemptKey]
         if (attemptState != null && nowMs < attemptState.blockedUntilMs) {

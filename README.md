@@ -100,6 +100,15 @@ Authenticated (`rs_session` cookie required):
 - `GET /api/download?path=<relativePath>`
 - `POST /api/upload?path=<relativePath>` (`multipart/form-data`, single file per request)
 
+`GET /health` response fields:
+- `status`: server health status (`ok` for MVP)
+- `serverStartedAtEpochMs`: Unix epoch milliseconds when server started
+- `uptimeMs`: elapsed server uptime in milliseconds
+- `rootSelected`: whether a SAF root is currently selected
+- `rootUri`: sanitized SAF tree identifier or `null`
+- `freeSpaceBytes`: best-effort free-space estimate available to the app, or `null`
+- `activeSessions`: current in-memory authenticated session count
+
 ## Security and Product Limits (MVP)
 - LAN HTTP only (no TLS in-app yet)
 - Session store is in-memory and resets when server stops

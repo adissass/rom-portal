@@ -20,6 +20,16 @@ class ServerLifecycleTest {
                     pin = "123456",
                     authManager = AuthManager(),
                     fileOps = NoopFileOpsGateway,
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            serverStartedAtEpochMs = 10_000,
+                            uptimeMs = 10,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
                     loginPageHtml = { "<html><body>login</body></html>" },
                     fileManagerPageHtml = { "<html><body>ok</body></html>" }
                 )

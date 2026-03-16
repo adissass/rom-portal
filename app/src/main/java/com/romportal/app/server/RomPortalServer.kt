@@ -2,6 +2,8 @@ package com.romportal.app.server
 
 import android.content.ContentResolver
 import android.content.Context
+import android.net.Uri
+import android.provider.DocumentsContract
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
@@ -42,12 +44,14 @@ internal class RomPortalServer(
         val pin = generatePin()
         val lanHost = detectLanAddress()
 
+        val startMs = System.currentTimeMillis()
         engine = embeddedServer(CIO, host = "0.0.0.0", port = preferredPort) {
             configureRomPortalRoutes(
                 RomPortalRouteConfig(
                     pin = pin,
                     authManager = authManager,
                     fileOps = fileOpsService,
+                    healthSnapshot = { buildHealthSnapshot(startMs) },
                     loginPageHtml = { loginHtml() },
                     fileManagerPageHtml = { fileManagerStubHtml() }
                 )
@@ -69,6 +73,37 @@ internal class RomPortalServer(
         engine = null
         state = null
         authManager.clear()
+    }
+
+    private fun buildHealthSnapshot(startMs: Long): HealthSnapshot {
+        val now = System.currentTimeMillis()
+        val rootUri = rootUriProvider().orEmpty().ifBlank { null }
+        return HealthSnapshot(
+            status = "ok",
+            serverStartedAtEpochMs = startMs,
+            uptimeMs = (now - startMs).coerceAtLeast(0L),
+            rootSelected = rootUri != null,
+            rootUri = rootUri?.let(::sanitizeRootUri),
+            freeSpaceBytes = readBestEffortFreeSpaceBytes(),
+            activeSessions = authManager.activeSessionCount()
+        )
+    }
+
+    private fun sanitizeRootUri(uriString: String): String {
+        return runCatching {
+            val uri = Uri.parse(uriString)
+            val authority = uri.authority.orEmpty()
+            val docId = DocumentsContract.getTreeDocumentId(uri)
+            if (authority.isBlank() && docId.isBlank()) {
+                uri.scheme ?: "content"
+            } else {
+                "${uri.scheme ?: "content"}://$authority/tree/$docId"
+            }
+        }.getOrElse { "content://invalid-tree-uri" }
+    }
+
+    private fun readBestEffortFreeSpaceBytes(): Long? {
+        return runCatching { context.cacheDir.usableSpace }.getOrNull()
     }
 
     private fun generatePin(): String {

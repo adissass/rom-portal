@@ -24,14 +24,28 @@ internal data class RomPortalRouteConfig(
     val pin: String,
     val authManager: AuthManager,
     val fileOps: FileOpsGateway,
+    val healthSnapshot: () -> HealthSnapshot,
     val loginPageHtml: () -> String,
     val fileManagerPageHtml: () -> String
+)
+
+internal data class HealthSnapshot(
+    val status: String = "ok",
+    val serverStartedAtEpochMs: Long,
+    val uptimeMs: Long,
+    val rootSelected: Boolean,
+    val rootUri: String?,
+    val freeSpaceBytes: Long?,
+    val activeSessions: Int
 )
 
 internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) {
     routing {
         get("/health") {
-            call.respondText("{\"status\":\"ok\"}", ContentType.Application.Json)
+            call.respondText(
+                config.healthSnapshot().toJson(),
+                ContentType.Application.Json
+            )
         }
 
         get("/login") {
@@ -283,4 +297,18 @@ private fun escapeJson(value: String): String {
         .replace("\"", "\\\"")
         .replace("\n", "\\n")
         .replace("\r", "\\r")
+}
+
+private fun HealthSnapshot.toJson(): String {
+    val rootUriJson = rootUri?.let { "\"${escapeJson(it)}\"" } ?: "null"
+    val freeSpaceJson = freeSpaceBytes?.toString() ?: "null"
+    return "{" +
+        "\"status\":\"${escapeJson(status)}\"," +
+        "\"serverStartedAtEpochMs\":$serverStartedAtEpochMs," +
+        "\"uptimeMs\":$uptimeMs," +
+        "\"rootSelected\":$rootSelected," +
+        "\"rootUri\":$rootUriJson," +
+        "\"freeSpaceBytes\":$freeSpaceJson," +
+        "\"activeSessions\":$activeSessions" +
+        "}"
 }

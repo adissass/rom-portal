@@ -31,6 +31,16 @@ class RomPortalApiIntegrationTest {
                     pin = "123456",
                     authManager = AuthManager(),
                     fileOps = fakeFileOps,
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            serverStartedAtEpochMs = 1_000,
+                            uptimeMs = 5_000,
+                            rootSelected = true,
+                            rootUri = "content://com.android.externalstorage.documents/tree/primary%3AMovies",
+                            freeSpaceBytes = 123_456_789,
+                            activeSessions = 0
+                        )
+                    },
                     loginPageHtml = { "<html><body>login</body></html>" },
                     fileManagerPageHtml = { "<html><body>ok</body></html>" }
                 )
@@ -119,6 +129,16 @@ class RomPortalApiIntegrationTest {
                     pin = "987654",
                     authManager = AuthManager(),
                     fileOps = fakeFileOps,
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            serverStartedAtEpochMs = 2_000,
+                            uptimeMs = 1_500,
+                            rootSelected = true,
+                            rootUri = "content://com.android.externalstorage.documents/tree/primary%3AMovies",
+                            freeSpaceBytes = 987_654_321,
+                            activeSessions = 0
+                        )
+                    },
                     loginPageHtml = { "<html><body>login</body></html>" },
                     fileManagerPageHtml = { "<html><body>ok</body></html>" }
                 )
@@ -176,6 +196,16 @@ class RomPortalApiIntegrationTest {
                     pin = "111111",
                     authManager = AuthManager(),
                     fileOps = fakeFileOps,
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            serverStartedAtEpochMs = 3_000,
+                            uptimeMs = 9_999,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
                     loginPageHtml = { "<html><body>login</body></html>" },
                     fileManagerPageHtml = { "<html><body>ok</body></html>" }
                 )
@@ -243,6 +273,43 @@ class RomPortalApiIntegrationTest {
             )
         }
         assertEquals(HttpStatusCode.BadRequest, uploadWithoutFilePart.status)
+    }
+
+    @Test
+    fun health_returnsStructuredSnapshot() = testApplication {
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "123123",
+                    authManager = AuthManager(),
+                    fileOps = FakeFileOpsGateway(),
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            status = "ok",
+                            serverStartedAtEpochMs = 10_000,
+                            uptimeMs = 321,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 2
+                        )
+                    },
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val response = client.get("/health")
+        val body = response.bodyAsText()
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(body.contains("\"status\":\"ok\""))
+        assertTrue(body.contains("\"serverStartedAtEpochMs\":10000"))
+        assertTrue(body.contains("\"uptimeMs\":321"))
+        assertTrue(body.contains("\"rootSelected\":false"))
+        assertTrue(body.contains("\"rootUri\":null"))
+        assertTrue(body.contains("\"freeSpaceBytes\":null"))
+        assertTrue(body.contains("\"activeSessions\":2"))
     }
 }
 
