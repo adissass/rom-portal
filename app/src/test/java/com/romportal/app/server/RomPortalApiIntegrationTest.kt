@@ -350,6 +350,107 @@ class RomPortalApiIntegrationTest {
         assertTrue(!secondRequestId.isNullOrBlank())
         assertTrue(firstRequestId != secondRequestId)
     }
+
+    @Test
+    fun apiList_returnsUnauthorized_whenSessionTtlExpires() = testApplication {
+        val authManager = AuthManager(
+            config = AuthConfig(
+                sessionTtlMs = 20,
+                inactivityTimeoutMs = 10_000
+            )
+        )
+
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "222333",
+                    authManager = authManager,
+                    fileOps = FakeFileOpsGateway(),
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            status = "ok",
+                            serverStartedAtEpochMs = 10_000,
+                            uptimeMs = 100,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val loginResponse = client.post("/login") {
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("pin", "222333") }))
+        }
+        assertEquals(HttpStatusCode.OK, loginResponse.status)
+        val cookie = loginResponse.headers[HttpHeaders.SetCookie]?.substringBefore(';')
+            ?: error("missing auth cookie")
+
+        Thread.sleep(40)
+
+        val expired = client.get("/api/list?path=") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.Unauthorized, expired.status)
+    }
+
+    @Test
+    fun apiList_returnsUnauthorized_whenSessionInactiveTooLong() = testApplication {
+        val authManager = AuthManager(
+            config = AuthConfig(
+                sessionTtlMs = 60_000,
+                inactivityTimeoutMs = 200
+            )
+        )
+
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "333444",
+                    authManager = authManager,
+                    fileOps = FakeFileOpsGateway(),
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            status = "ok",
+                            serverStartedAtEpochMs = 10_000,
+                            uptimeMs = 100,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val loginResponse = client.post("/login") {
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("pin", "333444") }))
+        }
+        assertEquals(HttpStatusCode.OK, loginResponse.status)
+        val cookie = loginResponse.headers[HttpHeaders.SetCookie]?.substringBefore(';')
+            ?: error("missing auth cookie")
+
+        val firstAccess = client.get("/api/list?path=") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.OK, firstAccess.status)
+
+        Thread.sleep(260)
+
+        val expiredByInactivity = client.get("/api/list?path=") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.Unauthorized, expiredByInactivity.status)
+    }
 }
 
 private class FakeFileOpsGateway : FileOpsGateway {
