@@ -19,6 +19,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
 class RomPortalApiIntegrationTest {
@@ -497,6 +498,144 @@ class RomPortalApiIntegrationTest {
             }
             assertEquals(HttpStatusCode.Unauthorized, downloadResponse.status)
         }
+    }
+
+    @Test
+    fun successfulAuthenticatedFileOps_triggerActivityCallback_onlyOnSuccess() = testApplication {
+        val activityCount = AtomicInteger(0)
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "112233",
+                    authManager = AuthManager(),
+                    fileOps = FakeFileOpsGateway(),
+                    onAuthenticatedFileApiSuccess = { activityCount.incrementAndGet() },
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            status = "ok",
+                            serverStartedAtEpochMs = 10_000,
+                            uptimeMs = 100,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val loginResponse = client.post("/login") {
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("pin", "112233") }))
+        }
+        assertEquals(HttpStatusCode.OK, loginResponse.status)
+        val cookie = loginResponse.headers[HttpHeaders.SetCookie]?.substringBefore(';')
+            ?: error("missing auth cookie")
+
+        client.get("/api/list?path=") { header(HttpHeaders.Cookie, cookie) }
+        client.post("/api/mkdir") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("path", "A") }))
+        }
+        client.post("/api/rename") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("path", "A"); append("newName", "B") }))
+        }
+        client.post("/api/delete") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("path", "B") }))
+        }
+        assertEquals(4, activityCount.get())
+
+        // Failing/unauthenticated operations should not increment callback count.
+        val unauth = client.get("/api/list?path=")
+        assertEquals(HttpStatusCode.Unauthorized, unauth.status)
+        val failingRename = client.post("/api/rename") {
+            header(HttpHeaders.Cookie, cookie)
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("path", "missing"); append("newName", "X") }))
+        }
+        assertEquals(HttpStatusCode.NotFound, failingRename.status)
+        assertEquals(4, activityCount.get())
+    }
+
+    @Test
+    fun uploadAndDownload_emitTransferLifecycleCallbacks_onSuccessAndFailure() = testApplication {
+        val transferStarted = AtomicInteger(0)
+        val transferFinished = AtomicInteger(0)
+
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "445566",
+                    authManager = AuthManager(),
+                    fileOps = FakeFileOpsGateway(),
+                    onTransferStarted = { transferStarted.incrementAndGet() },
+                    onTransferFinished = { transferFinished.incrementAndGet() },
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            status = "ok",
+                            serverStartedAtEpochMs = 10_000,
+                            uptimeMs = 100,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" }
+                )
+            )
+        }
+
+        val loginResponse = client.post("/login") {
+            header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())
+            setBody(FormDataContent(Parameters.build { append("pin", "445566") }))
+        }
+        assertEquals(HttpStatusCode.OK, loginResponse.status)
+        val cookie = loginResponse.headers[HttpHeaders.SetCookie]?.substringBefore(';')
+            ?: error("missing auth cookie")
+
+        val uploadOk = client.post("/api/upload?path=") {
+            header(HttpHeaders.Cookie, cookie)
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            key = "file",
+                            value = "payload".toByteArray(),
+                            headers = Headers.build {
+                                append(HttpHeaders.ContentDisposition, "form-data; name=\"file\"; filename=\"x.bin\"")
+                                append(HttpHeaders.ContentType, "application/octet-stream")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+        assertEquals(HttpStatusCode.OK, uploadOk.status)
+
+        val downloadOk = client.get("/api/download?path=x.bin") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.OK, downloadOk.status)
+        assertEquals("payload", downloadOk.bodyAsText())
+
+        val downloadMissing = client.get("/api/download?path=missing.bin") {
+            header(HttpHeaders.Cookie, cookie)
+        }
+        assertEquals(HttpStatusCode.NotFound, downloadMissing.status)
+
+        // Upload + download success = 2 starts/2 finishes. Missing download should not emit start/finish.
+        assertEquals(2, transferStarted.get())
+        assertEquals(2, transferFinished.get())
     }
 }
 
