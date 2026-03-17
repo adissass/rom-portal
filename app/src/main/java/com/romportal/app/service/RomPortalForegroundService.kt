@@ -18,9 +18,10 @@ import com.romportal.app.server.RomPortalServer
 class RomPortalForegroundService : Service() {
     private lateinit var romPortalServer: RomPortalServer
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var lastActivityAtMs: Long = 0L
-    private var warningShown = false
-    private var activeTransferCount = 0
+    private val idlePolicy = IdleTimeoutPolicy(
+        idleTimeoutMs = ServiceConfig.IDLE_TIMEOUT_MS,
+        warningLeadMs = ServiceConfig.WARNING_LEAD_MS
+    )
 
     private val warningRunnable = Runnable { maybeShowWarning() }
     private val stopRunnable = Runnable { maybeStopForInactivity() }
@@ -78,7 +79,7 @@ class RomPortalForegroundService : Service() {
             )
             val state = romPortalServer.start()
             ServiceRuntimeStore.onServerStarted(state)
-            resetIdleTimerLocked()
+            applySchedule(idlePolicy.onServerStarted(System.currentTimeMillis()))
             ServiceCompat.startForeground(
                 this,
                 ServiceConfig.NOTIFICATION_ID,
@@ -95,7 +96,6 @@ class RomPortalForegroundService : Service() {
     private fun stopServer() {
         mainHandler.removeCallbacks(warningRunnable)
         mainHandler.removeCallbacks(stopRunnable)
-        activeTransferCount = 0
         romPortalServer.stop()
         ServiceRuntimeStore.onServerStopped()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -124,9 +124,7 @@ class RomPortalForegroundService : Service() {
     private fun onTransferStarted() {
         runOnMain {
             if (ServiceRuntimeStore.serverState.value == null) return@runOnMain
-            activeTransferCount += 1
-            lastActivityAtMs = System.currentTimeMillis()
-            warningShown = false
+            idlePolicy.onTransferStarted(System.currentTimeMillis())
             mainHandler.removeCallbacks(warningRunnable)
             mainHandler.removeCallbacks(stopRunnable)
             ServiceRuntimeStore.serverState.value?.let { state ->
@@ -142,40 +140,34 @@ class RomPortalForegroundService : Service() {
 
     private fun onTransferFinished() {
         runOnMain {
-            if (activeTransferCount > 0) {
-                activeTransferCount -= 1
-            }
             if (ServiceRuntimeStore.serverState.value == null) return@runOnMain
-            if (activeTransferCount == 0) {
-                lastActivityAtMs = System.currentTimeMillis()
-                warningShown = false
-                scheduleIdleCallbacksLocked()
-            }
+            val schedule = idlePolicy.onTransferFinished(System.currentTimeMillis())
+            applySchedule(schedule)
         }
     }
 
     private fun resetIdleTimerLocked() {
-        lastActivityAtMs = System.currentTimeMillis()
-        warningShown = false
+        val schedule = idlePolicy.onActivity(System.currentTimeMillis())
         mainHandler.removeCallbacks(warningRunnable)
         mainHandler.removeCallbacks(stopRunnable)
-        if (activeTransferCount > 0) return
-        scheduleIdleCallbacksLocked()
+        applySchedule(schedule)
     }
 
-    private fun scheduleIdleCallbacksLocked() {
-        val warningDelay = (ServiceConfig.IDLE_TIMEOUT_MS - ServiceConfig.WARNING_LEAD_MS).coerceAtLeast(0L)
-        mainHandler.postDelayed(warningRunnable, warningDelay)
-        mainHandler.postDelayed(stopRunnable, ServiceConfig.IDLE_TIMEOUT_MS)
+    private fun applySchedule(schedule: IdleSchedule) {
+        mainHandler.removeCallbacks(warningRunnable)
+        mainHandler.removeCallbacks(stopRunnable)
+        schedule.warningDelayMs?.let { delay ->
+            mainHandler.postDelayed(warningRunnable, delay.coerceAtLeast(0))
+        }
+        schedule.stopDelayMs?.let { delay ->
+            mainHandler.postDelayed(stopRunnable, delay.coerceAtLeast(0))
+        }
     }
 
     private fun maybeShowWarning() {
         val state = ServiceRuntimeStore.serverState.value ?: return
-        if (activeTransferCount > 0) return
-        if (warningShown) return
-        val idleMs = System.currentTimeMillis() - lastActivityAtMs
-        if (idleMs >= (ServiceConfig.IDLE_TIMEOUT_MS - ServiceConfig.WARNING_LEAD_MS)) {
-            warningShown = true
+        val now = System.currentTimeMillis()
+        if (idlePolicy.warningDue(now)) {
             ServiceCompat.startForeground(
                 this,
                 ServiceConfig.NOTIFICATION_ID,
@@ -183,28 +175,24 @@ class RomPortalForegroundService : Service() {
                 android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             )
         } else {
-            val remaining = (ServiceConfig.IDLE_TIMEOUT_MS - ServiceConfig.WARNING_LEAD_MS) - idleMs
-            mainHandler.postDelayed(warningRunnable, remaining.coerceAtLeast(0L))
+            mainHandler.postDelayed(warningRunnable, idlePolicy.warningRemainingMs(now))
         }
     }
 
     private fun maybeStopForInactivity() {
         val state = ServiceRuntimeStore.serverState.value ?: return
-        if (activeTransferCount > 0) return
-        val idleMs = System.currentTimeMillis() - lastActivityAtMs
-        if (idleMs >= ServiceConfig.IDLE_TIMEOUT_MS) {
+        val now = System.currentTimeMillis()
+        if (idlePolicy.stopDue(now)) {
             stopServer()
             return
         }
-        mainHandler.postDelayed(stopRunnable, (ServiceConfig.IDLE_TIMEOUT_MS - idleMs).coerceAtLeast(0L))
-        if (!warningShown) {
-            ServiceCompat.startForeground(
-                this,
-                ServiceConfig.NOTIFICATION_ID,
-                buildRunningNotification(state.lanUrl, state.pin),
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            )
-        }
+        mainHandler.postDelayed(stopRunnable, idlePolicy.stopRemainingMs(now))
+        ServiceCompat.startForeground(
+            this,
+            ServiceConfig.NOTIFICATION_ID,
+            buildRunningNotification(state.lanUrl, state.pin),
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        )
     }
 
     private inline fun runOnMain(crossinline block: () -> Unit) {
