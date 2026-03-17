@@ -20,4 +20,8 @@ captures/
 # Generated
 app/release/
 app/debug/
+gradle/gradle-daemon-jvm.properties
+
+# Local runtime test artifacts
+tmp/
 cookies.txt
