@@ -10,6 +10,9 @@ internal object ServiceRuntimeStore {
 
     val serverState: StateFlow<ServerState?> = _serverState
     val serverError: StateFlow<String?> = _serverError
+    private var authenticatedActivityListener: (() -> Unit)? = null
+    private var transferStartedListener: (() -> Unit)? = null
+    private var transferFinishedListener: (() -> Unit)? = null
 
     fun onServerStarted(state: ServerState) {
         _serverState.value = state
@@ -25,5 +28,34 @@ internal object ServiceRuntimeStore {
         _serverState.value = null
         _serverError.value = null
     }
-}
 
+    fun registerAuthenticatedActivityListener(listener: () -> Unit) {
+        authenticatedActivityListener = listener
+    }
+
+    fun clearAuthenticatedActivityListener() {
+        authenticatedActivityListener = null
+    }
+
+    fun notifyAuthenticatedFileApiSuccess() {
+        authenticatedActivityListener?.invoke()
+    }
+
+    fun registerTransferListeners(onTransferStarted: () -> Unit, onTransferFinished: () -> Unit) {
+        transferStartedListener = onTransferStarted
+        transferFinishedListener = onTransferFinished
+    }
+
+    fun clearTransferListeners() {
+        transferStartedListener = null
+        transferFinishedListener = null
+    }
+
+    fun notifyTransferStarted() {
+        transferStartedListener?.invoke()
+    }
+
+    fun notifyTransferFinished() {
+        transferFinishedListener?.invoke()
+    }
+}

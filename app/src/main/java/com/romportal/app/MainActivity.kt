@@ -1,8 +1,11 @@
 package com.romportal.app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,9 +56,13 @@ class MainActivity : ComponentActivity() {
             selectedRootUri = uri.toString()
         }
 
+    private val requestNotificationsPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ -> }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         selectedRootUri = readSelectedRootUri()
+        requestNotificationPermissionIfNeeded()
 
         setContent {
             val serverState by ServiceRuntimeStore.serverState.collectAsState()
@@ -87,6 +94,17 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            requestNotificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
