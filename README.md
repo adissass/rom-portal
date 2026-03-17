@@ -82,7 +82,9 @@ Then open:
 
 Notes:
 - Use an ARM emulator image on Apple Silicon.
-- Current MVP server policy is foreground-only: server stops when app backgrounds.
+- Server is background-capable via foreground service notification.
+- Current timeout policy: warning at ~1m30s idle, auto-stop at ~2m idle.
+- Active upload/download suppresses timeout; idle timer resumes after transfer completes.
 
 ## API Endpoints (MVP)
 Public:
@@ -115,6 +117,7 @@ Authenticated (`rs_session` cookie required):
 - Cookie uses `HttpOnly` and `SameSite=Lax`
 - SAF root containment enforced for all file operations
 - Upload size default is storage-bounded unless max limit is configured
+- Foreground service is user-started and notification-visible while server is running
 
 ## Troubleshooting
 ### Run button is disabled in Android Studio
@@ -123,9 +126,10 @@ Authenticated (`rs_session` cookie required):
 - Ensure emulator/device is selected.
 
 ### Browser cannot connect to server
-- Confirm app is still in foreground and server is started.
+- Confirm server is started and foreground service notification is present.
 - Confirm same network/hotspot.
 - For emulator access from laptop, use adb forwarding.
+- If idle timeout elapsed with no activity, restart server in app.
 
 ### Login appears to do nothing
 - Re-open `/login`, re-enter current PIN from app UI.
@@ -144,6 +148,13 @@ Verify `/health` and `X-Request-ID`:
 ```bash
 curl -i --http1.1 http://127.0.0.1:8080/health
 curl -i --http1.1 http://127.0.0.1:8080/health | rg -i "x-request-id"
+```
+
+Verify idle timeout policy (current config: warn ~1m30s, stop ~2m):
+```bash
+curl -i http://127.0.0.1:8080/health
+sleep 130
+curl -i http://127.0.0.1:8080/health
 ```
 
 View RomPortal structured request logs only:
