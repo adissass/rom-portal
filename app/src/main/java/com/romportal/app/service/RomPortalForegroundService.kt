@@ -225,7 +225,7 @@ class RomPortalForegroundService : Service() {
             false
         )
 
-        return NotificationCompat.Builder(this, ServiceConfig.NOTIFICATION_CHANNEL_ID)
+        return NotificationCompat.Builder(this, ServiceConfig.NOTIFICATION_CHANNEL_ID_RUNNING)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(getString(R.string.notification_starting))
@@ -253,7 +253,7 @@ class RomPortalForegroundService : Service() {
             false
         )
 
-        return NotificationCompat.Builder(this, ServiceConfig.NOTIFICATION_CHANNEL_ID)
+        return NotificationCompat.Builder(this, ServiceConfig.NOTIFICATION_CHANNEL_ID_WARNING)
             .setSmallIcon(android.R.drawable.stat_sys_warning)
             .setContentTitle(getString(R.string.notification_warning_title))
             .setContentText(getString(R.string.notification_warning_body, url, pin))
@@ -282,7 +282,7 @@ class RomPortalForegroundService : Service() {
             false
         )
 
-        return NotificationCompat.Builder(this, ServiceConfig.NOTIFICATION_CHANNEL_ID)
+        return NotificationCompat.Builder(this, ServiceConfig.NOTIFICATION_CHANNEL_ID_RUNNING)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(getString(R.string.notification_body, url, pin))
@@ -296,12 +296,18 @@ class RomPortalForegroundService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channel = NotificationChannel(
-            ServiceConfig.NOTIFICATION_CHANNEL_ID,
-            getString(R.string.notification_channel_name),
+        val runningChannel = NotificationChannel(
+            ServiceConfig.NOTIFICATION_CHANNEL_ID_RUNNING,
+            getString(R.string.notification_channel_running_name),
             NotificationManager.IMPORTANCE_LOW
         )
-        manager.createNotificationChannel(channel)
+        val warningChannel = NotificationChannel(
+            ServiceConfig.NOTIFICATION_CHANNEL_ID_WARNING,
+            getString(R.string.notification_channel_warning_name),
+            NotificationManager.IMPORTANCE_HIGH
+        )
+        manager.createNotificationChannel(runningChannel)
+        manager.createNotificationChannel(warningChannel)
     }
 
     private fun readSelectedRootUri(): String? {

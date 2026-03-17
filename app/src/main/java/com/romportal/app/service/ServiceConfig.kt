@@ -12,9 +12,10 @@ internal object ServiceConfig {
     // Switch back to production by setting:
     // IDLE_TIMEOUT_MS = PROD_IDLE_TIMEOUT_MS
     // WARNING_LEAD_MS = PROD_WARNING_LEAD_MS
-    const val IDLE_TIMEOUT_MS = 30 * 1000L
-    const val WARNING_LEAD_MS = 10 * 1000L
+    const val IDLE_TIMEOUT_MS = 2 * 60 * 1000L
+    const val WARNING_LEAD_MS = 30 * 1000L
 
-    const val NOTIFICATION_CHANNEL_ID = "romportal_server_channel"
+    const val NOTIFICATION_CHANNEL_ID_RUNNING = "romportal_server_running_channel"
+    const val NOTIFICATION_CHANNEL_ID_WARNING = "romportal_server_warning_channel"
     const val NOTIFICATION_ID = 1001
 }
