@@ -24,7 +24,10 @@ internal class RomPortalServer(
     private val preferredPort: Int = 8080,
     private val authManager: AuthManager = AuthManager(),
     private val secureRandom: SecureRandom = SecureRandom(),
-    private val maxUploadBytes: Long? = null
+    private val maxUploadBytes: Long? = null,
+    private val onAuthenticatedFileApiSuccess: () -> Unit = {},
+    private val onTransferStarted: () -> Unit = {},
+    private val onTransferFinished: () -> Unit = {}
 ) {
     private var engine: ApplicationEngine? = null
     private var state: ServerState? = null
@@ -51,6 +54,9 @@ internal class RomPortalServer(
                     pin = pin,
                     authManager = authManager,
                     fileOps = fileOpsService,
+                    onAuthenticatedFileApiSuccess = onAuthenticatedFileApiSuccess,
+                    onTransferStarted = onTransferStarted,
+                    onTransferFinished = onTransferFinished,
                     healthSnapshot = { buildHealthSnapshot(startMs) },
                     loginPageHtml = { loginHtml() },
                     fileManagerPageHtml = { fileManagerStubHtml() }

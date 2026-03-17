@@ -25,6 +25,9 @@ internal data class RomPortalRouteConfig(
     val pin: String,
     val authManager: AuthManager,
     val fileOps: FileOpsGateway,
+    val onAuthenticatedFileApiSuccess: () -> Unit = {},
+    val onTransferStarted: () -> Unit = {},
+    val onTransferFinished: () -> Unit = {},
     val healthSnapshot: () -> HealthSnapshot,
     val loginPageHtml: () -> String,
     val fileManagerPageHtml: () -> String
@@ -130,6 +133,7 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
 
                 val result = config.fileOps.list(call.request.queryParameters["path"])
                 result.onSuccess { entries ->
+                    config.onAuthenticatedFileApiSuccess()
                     call.respondText(
                         toEntriesJson(entries),
                         contentType = ContentType.Application.Json,
@@ -149,6 +153,7 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
                 val path = call.receiveParameters()["path"].orEmpty()
                 val result = config.fileOps.mkdir(path)
                 result.onSuccess {
+                    config.onAuthenticatedFileApiSuccess()
                     call.respondText("{\"ok\":true}", ContentType.Application.Json)
                 }.onFailure { error ->
                     call.respondApiError(error)
@@ -166,6 +171,7 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
                 val newName = params["newName"].orEmpty()
                 val result = config.fileOps.rename(path, newName)
                 result.onSuccess {
+                    config.onAuthenticatedFileApiSuccess()
                     call.respondText("{\"ok\":true}", ContentType.Application.Json)
                 }.onFailure { error ->
                     call.respondApiError(error)
@@ -181,6 +187,7 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
                 val path = call.receiveParameters()["path"].orEmpty()
                 val result = config.fileOps.delete(path)
                 result.onSuccess {
+                    config.onAuthenticatedFileApiSuccess()
                     call.respondText("{\"ok\":true}", ContentType.Application.Json)
                 }.onFailure { error ->
                     call.respondApiError(error)
@@ -196,14 +203,19 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
                 val path = call.request.queryParameters["path"].orEmpty()
                 val result = config.fileOps.openDownload(path)
                 result.onSuccess { (name, input) ->
+                    config.onTransferStarted()
                     call.response.header(
                         HttpHeaders.ContentDisposition,
                         ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, name).toString()
                     )
-                    call.respondOutputStream(ContentType.Application.OctetStream) {
-                        input.use { stream ->
-                            stream.copyTo(this)
+                    try {
+                        call.respondOutputStream(ContentType.Application.OctetStream) {
+                            input.use { stream ->
+                                stream.copyTo(this)
+                            }
                         }
+                    } finally {
+                        config.onTransferFinished()
                     }
                 }.onFailure { error ->
                     call.respondApiError(error)
@@ -226,12 +238,17 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
                         if (part is PartData.FileItem && !uploaded) {
                             val filename = part.originalFileName ?: "upload.bin"
                             val contentLength = part.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-                            val result = config.fileOps.upload(
-                                destinationPath = destinationPath,
-                                filename = filename,
-                                input = part.streamProvider(),
-                                contentLength = contentLength
-                            )
+                            config.onTransferStarted()
+                            val result = try {
+                                config.fileOps.upload(
+                                    destinationPath = destinationPath,
+                                    filename = filename,
+                                    input = part.streamProvider(),
+                                    contentLength = contentLength
+                                )
+                            } finally {
+                                config.onTransferFinished()
+                            }
                             result.exceptionOrNull()?.let { uploadError = it }
                             uploaded = result.isSuccess
                         }
