@@ -215,6 +215,10 @@ internal class RomPortalServer(
                 .status.success { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
                 .status.error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
                 .linklike { color: var(--accent); text-decoration: underline; cursor: pointer; border: 0; background: transparent; padding: 0; }
+                .upload-progress-wrap { margin-top: 10px; display: none; }
+                .upload-progress-meta { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+                progress { width: 100%; height: 10px; }
+                .hidden { display: none !important; }
               </style>
             </head>
             <body>
@@ -232,6 +236,11 @@ internal class RomPortalServer(
                   <div class="row" style="margin-top:10px;">
                     <input id="uploadInput" type="file" multiple />
                     <button id="uploadBtn" class="primary">Upload</button>
+                    <button id="retryFailedBtn" class="hidden">Retry Failed Uploads</button>
+                  </div>
+                  <div id="uploadProgressWrap" class="upload-progress-wrap">
+                    <div id="uploadProgressMeta" class="upload-progress-meta"></div>
+                    <progress id="uploadProgress" value="0" max="100"></progress>
                   </div>
                   <div id="status" class="status"></div>
                 </div>
@@ -256,7 +265,14 @@ internal class RomPortalServer(
                 const entriesBody = document.getElementById("entriesBody");
                 const mkdirInput = document.getElementById("mkdirInput");
                 const uploadInput = document.getElementById("uploadInput");
+                const uploadBtn = document.getElementById("uploadBtn");
+                const retryFailedBtn = document.getElementById("retryFailedBtn");
+                const uploadProgressWrap = document.getElementById("uploadProgressWrap");
+                const uploadProgressMeta = document.getElementById("uploadProgressMeta");
+                const uploadProgress = document.getElementById("uploadProgress");
                 let authRedirectPending = false;
+                let failedUploads = [];
+                let uploadBusy = false;
 
                 function setStatus(message, type) {
                   statusEl.textContent = message || "";
@@ -288,6 +304,113 @@ internal class RomPortalServer(
                 function joinPath(base, name) {
                   if (!base) return name;
                   return base + "/" + name;
+                }
+
+                function parseErrorText(text, fallback) {
+                  let parsedMessage = text;
+                  try {
+                    const parsed = text ? JSON.parse(text) : null;
+                    if (parsed && parsed.error) {
+                      parsedMessage = parsed.error;
+                    }
+                  } catch (_) {}
+                  return parsedMessage || fallback;
+                }
+
+                function setUploadUiBusy(isBusy) {
+                  uploadBusy = isBusy;
+                  uploadBtn.disabled = isBusy;
+                  retryFailedBtn.disabled = isBusy;
+                  uploadInput.disabled = isBusy;
+                }
+
+                function setRetryButtonVisible(visible) {
+                  if (visible) {
+                    retryFailedBtn.classList.remove("hidden");
+                  } else {
+                    retryFailedBtn.classList.add("hidden");
+                  }
+                }
+
+                function showUploadProgress(label, percent) {
+                  uploadProgressWrap.style.display = "block";
+                  uploadProgressMeta.textContent = label;
+                  uploadProgress.value = Math.max(0, Math.min(100, percent));
+                }
+
+                function hideUploadProgress() {
+                  uploadProgressWrap.style.display = "none";
+                  uploadProgressMeta.textContent = "";
+                  uploadProgress.value = 0;
+                }
+
+                function uploadSingleFile(file, index, total) {
+                  return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/api/upload?path=" + encodeURIComponent(currentPath));
+                    xhr.upload.onprogress = (event) => {
+                      if (!event.lengthComputable) return;
+                      const percent = Math.round((event.loaded / event.total) * 100);
+                      showUploadProgress(
+                        "Uploading " + file.name + " (" + (index + 1) + "/" + total + ") - " + percent + "%",
+                        percent
+                      );
+                    };
+                    xhr.onerror = () => {
+                      const error = new Error("Network error during upload");
+                      error.status = 0;
+                      reject(error);
+                    };
+                    xhr.onload = () => {
+                      if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve();
+                        return;
+                      }
+                      const error = new Error(parseErrorText(xhr.responseText, "Upload failed: HTTP " + xhr.status));
+                      error.status = xhr.status;
+                      reject(error);
+                    };
+                    const form = new FormData();
+                    form.append("file", file, file.name);
+                    xhr.send(form);
+                  });
+                }
+
+                async function runUploadQueue(files) {
+                  if (!files.length) return;
+                  setUploadUiBusy(true);
+                  setRetryButtonVisible(false);
+                  failedUploads = [];
+                  try {
+                    for (let i = 0; i < files.length; i++) {
+                      const file = files[i];
+                      try {
+                        showUploadProgress("Uploading " + file.name + " (" + (i + 1) + "/" + files.length + ")", 0);
+                        await uploadSingleFile(file, i, files.length);
+                      } catch (e) {
+                        failedUploads.push(file);
+                        if (e && e.status === 401) {
+                          handleSessionExpired();
+                          break;
+                        }
+                        setStatus("Upload failed for " + file.name + ": " + (e.message || "Unknown error"), "error");
+                      }
+                    }
+
+                    await refreshList(false);
+                    if (failedUploads.length > 0) {
+                      setRetryButtonVisible(true);
+                      setStatus(
+                        "Uploaded with failures (" + failedUploads.length + " failed). Use Retry Failed Uploads.",
+                        "error"
+                      );
+                    } else {
+                      setStatus("Upload completed (" + files.length + " file" + (files.length > 1 ? "s" : "") + ")", "success");
+                    }
+                  } finally {
+                    setUploadUiBusy(false);
+                    hideUploadProgress();
+                  }
                 }
 
                 function sortEntriesStable(entries) {
@@ -493,38 +616,17 @@ internal class RomPortalServer(
                   }
                 };
 
-                document.getElementById("uploadBtn").onclick = async () => {
+                uploadBtn.onclick = async () => {
                   const files = Array.from(uploadInput.files || []);
-                  if (!files.length) return;
-                  try {
-                    for (let i = 0; i < files.length; i++) {
-                      const file = files[i];
-                      setStatus("Uploading " + file.name + " (" + (i + 1) + "/" + files.length + ")", "info");
-                      const form = new FormData();
-                      form.append("file", file, file.name);
-                      const response = await fetch("/api/upload?path=" + encodeURIComponent(currentPath), {
-                        method: "POST",
-                        body: form
-                      });
-                      if (!response.ok) {
-                        let text = await response.text();
-                        try {
-                          const parsed = text ? JSON.parse(text) : null;
-                          if (parsed && parsed.error) {
-                            text = parsed.error;
-                          }
-                        } catch (_) {}
-                        const error = new Error(text || ("Upload failed: HTTP " + response.status));
-                        error.status = response.status;
-                        throw error;
-                      }
-                    }
-                    uploadInput.value = "";
-                    await refreshList(false);
-                    setStatus("Upload completed (" + files.length + " file" + (files.length > 1 ? "s" : "") + ")", "success");
-                  } catch (e) {
-                    handleApiError(e);
-                  }
+                  if (!files.length || uploadBusy) return;
+                  await runUploadQueue(files);
+                  uploadInput.value = "";
+                };
+
+                retryFailedBtn.onclick = async () => {
+                  if (uploadBusy || failedUploads.length === 0) return;
+                  const retryBatch = failedUploads.slice();
+                  await runUploadQueue(retryBatch);
                 };
 
                 refreshList();
