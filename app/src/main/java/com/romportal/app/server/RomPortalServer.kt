@@ -200,9 +200,28 @@ internal class RomPortalServer(
                 th, td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; }
                 th { color: var(--muted); font-weight: 600; }
                 .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
-                .status { font-size: 13px; margin-top: 8px; color: var(--muted); min-height: 20px; }
-                .status.error { color: var(--danger); }
+                .crumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+                .crumb-sep { color: var(--muted); }
+                .status {
+                  font-size: 13px;
+                  margin-top: 8px;
+                  min-height: 20px;
+                  border-radius: 8px;
+                  padding: 8px 10px;
+                  border: 1px solid transparent;
+                  background: transparent;
+                }
+                .status.info { color: #1e40af; background: #eff6ff; border-color: #bfdbfe; }
+                .status.success { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
+                .status.error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
                 .linklike { color: var(--accent); text-decoration: underline; cursor: pointer; border: 0; background: transparent; padding: 0; }
+                .upload-progress-wrap { margin-top: 10px; display: none; }
+                .upload-progress-meta { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+                .failed-uploads { margin-top: 10px; border: 1px solid #fecaca; background: #fff7f7; border-radius: 8px; padding: 8px 10px; }
+                .failed-uploads h3 { margin: 0 0 6px 0; font-size: 13px; color: #991b1b; }
+                .failed-uploads ul { margin: 0; padding-left: 18px; font-size: 12px; color: #7f1d1d; }
+                progress { width: 100%; height: 10px; }
+                .hidden { display: none !important; }
               </style>
             </head>
             <body>
@@ -211,16 +230,24 @@ internal class RomPortalServer(
                   <h1>RomPortal</h1>
                   <div class="row">
                     <span class="muted">Path:</span>
-                    <span id="pathLabel" class="path"></span>
+                    <div id="breadcrumb" class="crumbs path"></div>
                   </div>
                   <div class="row" style="margin-top:10px;">
-                    <button id="upBtn">Up</button>
                     <input id="mkdirInput" type="text" placeholder="New folder name" />
                     <button id="mkdirBtn">Create Folder</button>
                   </div>
                   <div class="row" style="margin-top:10px;">
                     <input id="uploadInput" type="file" multiple />
                     <button id="uploadBtn" class="primary">Upload</button>
+                    <button id="retryFailedBtn" class="hidden">Retry Failed Uploads</button>
+                  </div>
+                  <div id="uploadProgressWrap" class="upload-progress-wrap">
+                    <div id="uploadProgressMeta" class="upload-progress-meta"></div>
+                    <progress id="uploadProgress" value="0" max="100"></progress>
+                  </div>
+                  <div id="failedUploadsWrap" class="failed-uploads hidden">
+                    <h3 id="failedUploadsTitle">Failed uploads</h3>
+                    <ul id="failedUploadsList"></ul>
                   </div>
                   <div id="status" class="status"></div>
                 </div>
@@ -240,15 +267,49 @@ internal class RomPortalServer(
               </div>
               <script>
                 let currentPath = "";
-                const pathLabel = document.getElementById("pathLabel");
+                const breadcrumbEl = document.getElementById("breadcrumb");
                 const statusEl = document.getElementById("status");
                 const entriesBody = document.getElementById("entriesBody");
                 const mkdirInput = document.getElementById("mkdirInput");
                 const uploadInput = document.getElementById("uploadInput");
+                const uploadBtn = document.getElementById("uploadBtn");
+                const retryFailedBtn = document.getElementById("retryFailedBtn");
+                const uploadProgressWrap = document.getElementById("uploadProgressWrap");
+                const uploadProgressMeta = document.getElementById("uploadProgressMeta");
+                const uploadProgress = document.getElementById("uploadProgress");
+                const failedUploadsWrap = document.getElementById("failedUploadsWrap");
+                const failedUploadsTitle = document.getElementById("failedUploadsTitle");
+                const failedUploadsList = document.getElementById("failedUploadsList");
+                let authRedirectPending = false;
+                let failedUploads = [];
+                let uploadBusy = false;
 
-                function setStatus(message, isError) {
+                function setStatus(message, type) {
                   statusEl.textContent = message || "";
-                  statusEl.className = isError ? "status error" : "status";
+                  if (!message) {
+                    statusEl.className = "status";
+                    return;
+                  }
+                  statusEl.className = "status " + (type || "info");
+                }
+
+                function handleSessionExpired() {
+                  if (authRedirectPending) return true;
+                  authRedirectPending = true;
+                  setStatus("Session expired. Redirecting to login...", "error");
+                  setTimeout(() => {
+                    window.location.href = "/login";
+                  }, 600);
+                  return true;
+                }
+
+                function handleApiError(error) {
+                  if (error && error.status === 401) {
+                    return handleSessionExpired();
+                  }
+                  const message = mapUserMessage(error ? error.status : null, (error && error.message) ? error.message : "");
+                  setStatus(message, "error");
+                  return false;
                 }
 
                 function joinPath(base, name) {
@@ -256,11 +317,203 @@ internal class RomPortalServer(
                   return base + "/" + name;
                 }
 
-                function parentPath(path) {
-                  if (!path) return "";
-                  const parts = path.split("/").filter(Boolean);
-                  parts.pop();
-                  return parts.join("/");
+                function parseErrorText(text, fallback) {
+                  let parsedMessage = text;
+                  try {
+                    const parsed = text ? JSON.parse(text) : null;
+                    if (parsed && parsed.error) {
+                      parsedMessage = parsed.error;
+                    }
+                  } catch (_) {}
+                  return parsedMessage || fallback;
+                }
+
+                function sanitizePathValue(pathValue) {
+                  return String(pathValue || "").split("/").filter(Boolean).join("/");
+                }
+
+                function updatePathInUrl() {
+                  const params = new URLSearchParams(window.location.search);
+                  if (currentPath) {
+                    params.set("path", currentPath);
+                  } else {
+                    params.delete("path");
+                  }
+                  const query = params.toString();
+                  const nextUrl = window.location.pathname + (query ? ("?" + query) : "");
+                  window.history.replaceState(null, "", nextUrl);
+                }
+
+                function mapUserMessage(status, rawMessage) {
+                  const message = String(rawMessage || "").trim();
+                  const lower = message.toLowerCase();
+                  if (status === 409 || lower.includes("already exists")) {
+                    return "File or folder already exists. Rename and try again.";
+                  }
+                  if (status === 507 || lower.includes("insufficient")) {
+                    return "Not enough free storage. Free space and retry.";
+                  }
+                  if (status === 400 && (lower.includes("traversal") || lower.includes("invalid path") || lower.includes("absolute"))) {
+                    return "Invalid path or folder location.";
+                  }
+                  if (status === 0) {
+                    return "Network error. Check connection and retry.";
+                  }
+                  if (!message) {
+                    return "Unexpected error. Please retry.";
+                  }
+                  return message;
+                }
+
+                function setUploadUiBusy(isBusy) {
+                  uploadBusy = isBusy;
+                  uploadBtn.disabled = isBusy;
+                  retryFailedBtn.disabled = isBusy;
+                  uploadInput.disabled = isBusy;
+                }
+
+                function setRetryButtonVisible(visible) {
+                  if (visible) {
+                    retryFailedBtn.classList.remove("hidden");
+                  } else {
+                    retryFailedBtn.classList.add("hidden");
+                  }
+                }
+
+                function renderFailedUploads() {
+                  failedUploadsList.innerHTML = "";
+                  if (!failedUploads.length) {
+                    failedUploadsWrap.classList.add("hidden");
+                    failedUploadsTitle.textContent = "Failed uploads";
+                    return;
+                  }
+                  failedUploadsWrap.classList.remove("hidden");
+                  failedUploadsTitle.textContent = "Failed uploads (" + failedUploads.length + ")";
+                  for (const item of failedUploads) {
+                    const li = document.createElement("li");
+                    li.textContent = item.file.name + ": " + item.reason;
+                    failedUploadsList.appendChild(li);
+                  }
+                }
+
+                function showUploadProgress(label, percent) {
+                  uploadProgressWrap.style.display = "block";
+                  uploadProgressMeta.textContent = label;
+                  uploadProgress.value = Math.max(0, Math.min(100, percent));
+                }
+
+                function hideUploadProgress() {
+                  uploadProgressWrap.style.display = "none";
+                  uploadProgressMeta.textContent = "";
+                  uploadProgress.value = 0;
+                }
+
+                function uploadSingleFile(file, index, total) {
+                  return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/api/upload?path=" + encodeURIComponent(currentPath));
+                    xhr.upload.onprogress = (event) => {
+                      if (!event.lengthComputable) return;
+                      const percent = Math.round((event.loaded / event.total) * 100);
+                      showUploadProgress(
+                        "Uploading " + file.name + " (" + (index + 1) + "/" + total + ") - " + percent + "%",
+                        percent
+                      );
+                    };
+                    xhr.onerror = () => {
+                      const error = new Error("Network error during upload");
+                      error.status = 0;
+                      reject(error);
+                    };
+                    xhr.onload = () => {
+                      if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve();
+                        return;
+                      }
+                      const error = new Error(parseErrorText(xhr.responseText, "Upload failed: HTTP " + xhr.status));
+                      error.status = xhr.status;
+                      reject(error);
+                    };
+                    const form = new FormData();
+                    form.append("file", file, file.name);
+                    xhr.send(form);
+                  });
+                }
+
+                async function runUploadQueue(files) {
+                  if (!files.length) return;
+                  setUploadUiBusy(true);
+                  setRetryButtonVisible(false);
+                  failedUploads = [];
+                  renderFailedUploads();
+                  try {
+                    for (let i = 0; i < files.length; i++) {
+                      const file = files[i];
+                      try {
+                        showUploadProgress("Uploading " + file.name + " (" + (i + 1) + "/" + files.length + ")", 0);
+                        await uploadSingleFile(file, i, files.length);
+                      } catch (e) {
+                        const reason = mapUserMessage(e ? e.status : null, e ? e.message : "");
+                        failedUploads.push({ file: file, reason: reason, status: e ? e.status : null });
+                        if (e && e.status === 401) {
+                          handleSessionExpired();
+                          break;
+                        }
+                        setStatus("Upload failed for " + file.name + ": " + reason, "error");
+                      }
+                    }
+
+                    await refreshList(false);
+                    if (failedUploads.length > 0) {
+                      setRetryButtonVisible(true);
+                      renderFailedUploads();
+                      setStatus("", "info");
+                    } else {
+                      renderFailedUploads();
+                      setStatus("Upload completed (" + files.length + " file" + (files.length > 1 ? "s" : "") + ")", "success");
+                    }
+                  } finally {
+                    setUploadUiBusy(false);
+                    hideUploadProgress();
+                  }
+                }
+
+                function sortEntriesStable(entries) {
+                  return [...entries].sort((a, b) => {
+                    if (a.isDirectory !== b.isDirectory) {
+                      return a.isDirectory ? -1 : 1;
+                    }
+                    const aLower = String(a.name || "").toLowerCase();
+                    const bLower = String(b.name || "").toLowerCase();
+                    if (aLower < bLower) return -1;
+                    if (aLower > bLower) return 1;
+                    return String(a.name || "").localeCompare(String(b.name || ""));
+                  });
+                }
+
+                function renderBreadcrumb() {
+                  breadcrumbEl.innerHTML = "";
+
+                  function addCrumb(label, pathValue) {
+                    const btn = document.createElement("button");
+                    btn.className = "linklike";
+                    btn.textContent = label;
+                    btn.onclick = () => {
+                      currentPath = pathValue;
+                      refreshList();
+                    };
+                    breadcrumbEl.appendChild(btn);
+                  }
+
+                  addCrumb("Root", "");
+                  const segments = currentPath.split("/").filter(Boolean);
+                  for (let i = 0; i < segments.length; i++) {
+                    const sep = document.createElement("span");
+                    sep.className = "crumb-sep";
+                    sep.textContent = "/";
+                    breadcrumbEl.appendChild(sep);
+                    addCrumb(segments[i], segments.slice(0, i + 1).join("/"));
+                  }
                 }
 
                 function formatBytes(bytes) {
@@ -278,20 +531,29 @@ internal class RomPortalServer(
                   try { data = text ? JSON.parse(text) : null; } catch (_) {}
                   if (!response.ok) {
                     const message = (data && data.error) ? data.error : (text || ("HTTP " + response.status));
-                    throw new Error(message);
+                    const error = new Error(message);
+                    error.status = response.status;
+                    throw error;
                   }
                   return data;
                 }
 
-                async function refreshList() {
+                async function refreshList(showLoading = true) {
                   try {
-                    setStatus("Loading...", false);
-                    pathLabel.textContent = "/" + currentPath;
+                    if (showLoading) {
+                      setStatus("Loading...", "info");
+                    }
+                    currentPath = sanitizePathValue(currentPath);
+                    updatePathInUrl();
+                    renderBreadcrumb();
                     const data = await apiJson("/api/list?path=" + encodeURIComponent(currentPath));
-                    renderEntries((data && data.entries) ? data.entries : []);
-                    setStatus("Ready", false);
+                    const entries = (data && data.entries) ? data.entries : [];
+                    renderEntries(sortEntriesStable(entries));
+                    if (showLoading) {
+                      setStatus("Ready", "success");
+                    }
                   } catch (e) {
-                    setStatus(e.message, true);
+                    handleApiError(e);
                   }
                 }
 
@@ -337,9 +599,20 @@ internal class RomPortalServer(
                     if (!entry.isDirectory) {
                       const dlBtn = document.createElement("button");
                       dlBtn.textContent = "Download";
-                      dlBtn.onclick = () => {
-                        const path = joinPath(currentPath, entry.name);
-                        window.location.href = "/api/download?path=" + encodeURIComponent(path);
+                      dlBtn.onclick = async () => {
+                        try {
+                          await apiJson("/api/ping");
+                          const path = joinPath(currentPath, entry.name);
+                          setStatus("Download started: " + entry.name, "info");
+                          window.location.href = "/api/download?path=" + encodeURIComponent(path);
+                          setTimeout(() => {
+                            if (!authRedirectPending) {
+                              setStatus("", "info");
+                            }
+                          }, 2000);
+                        } catch (e) {
+                          handleApiError(e);
+                        }
                       };
                       actionsCell.appendChild(dlBtn);
                     }
@@ -356,9 +629,10 @@ internal class RomPortalServer(
                           headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
                           body: new URLSearchParams({ path: path, newName: newName })
                         });
-                        await refreshList();
+                        await refreshList(false);
+                        setStatus("Renamed " + entry.name + " to " + newName, "success");
                       } catch (e) {
-                        setStatus(e.message, true);
+                        handleApiError(e);
                       }
                     };
                     actionsCell.appendChild(renameBtn);
@@ -367,17 +641,19 @@ internal class RomPortalServer(
                     deleteBtn.className = "danger";
                     deleteBtn.textContent = "Delete";
                     deleteBtn.onclick = async () => {
-                      if (!confirm("Delete " + entry.name + "?")) return;
+                      const entryPath = joinPath(currentPath, entry.name);
+                      const entryType = entry.isDirectory ? "folder" : "file";
+                      if (!confirm("Delete " + entryType + " '" + entryPath + "'? This is permanent.")) return;
                       try {
-                        const path = joinPath(currentPath, entry.name);
                         await apiJson("/api/delete", {
                           method: "POST",
                           headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-                          body: new URLSearchParams({ path: path })
+                          body: new URLSearchParams({ path: entryPath })
                         });
-                        await refreshList();
+                        await refreshList(false);
+                        setStatus("Deleted " + entryType + ": " + entryPath, "success");
                       } catch (e) {
-                        setStatus(e.message, true);
+                        handleApiError(e);
                       }
                     };
                     actionsCell.appendChild(deleteBtn);
@@ -390,11 +666,6 @@ internal class RomPortalServer(
                   }
                 }
 
-                document.getElementById("upBtn").onclick = () => {
-                  currentPath = parentPath(currentPath);
-                  refreshList();
-                };
-
                 document.getElementById("mkdirBtn").onclick = async () => {
                   const name = (mkdirInput.value || "").trim();
                   if (!name) return;
@@ -406,37 +677,27 @@ internal class RomPortalServer(
                       body: new URLSearchParams({ path: path })
                     });
                     mkdirInput.value = "";
-                    await refreshList();
+                    await refreshList(false);
+                    setStatus("Created folder: " + name, "success");
                   } catch (e) {
-                    setStatus(e.message, true);
+                    handleApiError(e);
                   }
                 };
 
-                document.getElementById("uploadBtn").onclick = async () => {
+                uploadBtn.onclick = async () => {
                   const files = Array.from(uploadInput.files || []);
-                  if (!files.length) return;
-                  try {
-                    for (let i = 0; i < files.length; i++) {
-                      const file = files[i];
-                      setStatus("Uploading " + file.name + " (" + (i + 1) + "/" + files.length + ")", false);
-                      const form = new FormData();
-                      form.append("file", file, file.name);
-                      const response = await fetch("/api/upload?path=" + encodeURIComponent(currentPath), {
-                        method: "POST",
-                        body: form
-                      });
-                      if (!response.ok) {
-                        const text = await response.text();
-                        throw new Error(text || ("Upload failed: HTTP " + response.status));
-                      }
-                    }
-                    uploadInput.value = "";
-                    await refreshList();
-                  } catch (e) {
-                    setStatus(e.message, true);
-                  }
+                  if (!files.length || uploadBusy) return;
+                  await runUploadQueue(files);
+                  uploadInput.value = "";
                 };
 
+                retryFailedBtn.onclick = async () => {
+                  if (uploadBusy || failedUploads.length === 0) return;
+                  const retryBatch = failedUploads.map(item => item.file);
+                  await runUploadQueue(retryBatch);
+                };
+
+                currentPath = sanitizePathValue(new URLSearchParams(window.location.search).get("path") || "");
                 refreshList();
               </script>
             </body>
