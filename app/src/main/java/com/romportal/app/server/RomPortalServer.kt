@@ -202,8 +202,18 @@ internal class RomPortalServer(
                 .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
                 .crumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
                 .crumb-sep { color: var(--muted); }
-                .status { font-size: 13px; margin-top: 8px; color: var(--muted); min-height: 20px; }
-                .status.error { color: var(--danger); }
+                .status {
+                  font-size: 13px;
+                  margin-top: 8px;
+                  min-height: 20px;
+                  border-radius: 8px;
+                  padding: 8px 10px;
+                  border: 1px solid transparent;
+                  background: transparent;
+                }
+                .status.info { color: #1e40af; background: #eff6ff; border-color: #bfdbfe; }
+                .status.success { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
+                .status.error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
                 .linklike { color: var(--accent); text-decoration: underline; cursor: pointer; border: 0; background: transparent; padding: 0; }
               </style>
             </head>
@@ -246,10 +256,33 @@ internal class RomPortalServer(
                 const entriesBody = document.getElementById("entriesBody");
                 const mkdirInput = document.getElementById("mkdirInput");
                 const uploadInput = document.getElementById("uploadInput");
+                let authRedirectPending = false;
 
-                function setStatus(message, isError) {
+                function setStatus(message, type) {
                   statusEl.textContent = message || "";
-                  statusEl.className = isError ? "status error" : "status";
+                  if (!message) {
+                    statusEl.className = "status";
+                    return;
+                  }
+                  statusEl.className = "status " + (type || "info");
+                }
+
+                function handleSessionExpired() {
+                  if (authRedirectPending) return true;
+                  authRedirectPending = true;
+                  setStatus("Session expired. Redirecting to login...", "error");
+                  setTimeout(() => {
+                    window.location.href = "/login";
+                  }, 600);
+                  return true;
+                }
+
+                function handleApiError(error) {
+                  if (error && error.status === 401) {
+                    return handleSessionExpired();
+                  }
+                  setStatus((error && error.message) ? error.message : "Unexpected error", "error");
+                  return false;
                 }
 
                 function joinPath(base, name) {
@@ -310,21 +343,27 @@ internal class RomPortalServer(
                   try { data = text ? JSON.parse(text) : null; } catch (_) {}
                   if (!response.ok) {
                     const message = (data && data.error) ? data.error : (text || ("HTTP " + response.status));
-                    throw new Error(message);
+                    const error = new Error(message);
+                    error.status = response.status;
+                    throw error;
                   }
                   return data;
                 }
 
-                async function refreshList() {
+                async function refreshList(showLoading = true) {
                   try {
-                    setStatus("Loading...", false);
+                    if (showLoading) {
+                      setStatus("Loading...", "info");
+                    }
                     renderBreadcrumb();
                     const data = await apiJson("/api/list?path=" + encodeURIComponent(currentPath));
                     const entries = (data && data.entries) ? data.entries : [];
                     renderEntries(sortEntriesStable(entries));
-                    setStatus("Ready", false);
+                    if (showLoading) {
+                      setStatus("Ready", "success");
+                    }
                   } catch (e) {
-                    setStatus(e.message, true);
+                    handleApiError(e);
                   }
                 }
 
@@ -370,9 +409,20 @@ internal class RomPortalServer(
                     if (!entry.isDirectory) {
                       const dlBtn = document.createElement("button");
                       dlBtn.textContent = "Download";
-                      dlBtn.onclick = () => {
-                        const path = joinPath(currentPath, entry.name);
-                        window.location.href = "/api/download?path=" + encodeURIComponent(path);
+                      dlBtn.onclick = async () => {
+                        try {
+                          await apiJson("/api/ping");
+                          const path = joinPath(currentPath, entry.name);
+                          setStatus("Download started: " + entry.name, "info");
+                          window.location.href = "/api/download?path=" + encodeURIComponent(path);
+                          setTimeout(() => {
+                            if (!authRedirectPending) {
+                              setStatus("", "info");
+                            }
+                          }, 2000);
+                        } catch (e) {
+                          handleApiError(e);
+                        }
                       };
                       actionsCell.appendChild(dlBtn);
                     }
@@ -389,9 +439,10 @@ internal class RomPortalServer(
                           headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
                           body: new URLSearchParams({ path: path, newName: newName })
                         });
-                        await refreshList();
+                        await refreshList(false);
+                        setStatus("Renamed " + entry.name + " to " + newName, "success");
                       } catch (e) {
-                        setStatus(e.message, true);
+                        handleApiError(e);
                       }
                     };
                     actionsCell.appendChild(renameBtn);
@@ -408,9 +459,10 @@ internal class RomPortalServer(
                           headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
                           body: new URLSearchParams({ path: path })
                         });
-                        await refreshList();
+                        await refreshList(false);
+                        setStatus("Deleted " + entry.name, "success");
                       } catch (e) {
-                        setStatus(e.message, true);
+                        handleApiError(e);
                       }
                     };
                     actionsCell.appendChild(deleteBtn);
@@ -434,9 +486,10 @@ internal class RomPortalServer(
                       body: new URLSearchParams({ path: path })
                     });
                     mkdirInput.value = "";
-                    await refreshList();
+                    await refreshList(false);
+                    setStatus("Created folder: " + name, "success");
                   } catch (e) {
-                    setStatus(e.message, true);
+                    handleApiError(e);
                   }
                 };
 
@@ -446,7 +499,7 @@ internal class RomPortalServer(
                   try {
                     for (let i = 0; i < files.length; i++) {
                       const file = files[i];
-                      setStatus("Uploading " + file.name + " (" + (i + 1) + "/" + files.length + ")", false);
+                      setStatus("Uploading " + file.name + " (" + (i + 1) + "/" + files.length + ")", "info");
                       const form = new FormData();
                       form.append("file", file, file.name);
                       const response = await fetch("/api/upload?path=" + encodeURIComponent(currentPath), {
@@ -454,14 +507,23 @@ internal class RomPortalServer(
                         body: form
                       });
                       if (!response.ok) {
-                        const text = await response.text();
-                        throw new Error(text || ("Upload failed: HTTP " + response.status));
+                        let text = await response.text();
+                        try {
+                          const parsed = text ? JSON.parse(text) : null;
+                          if (parsed && parsed.error) {
+                            text = parsed.error;
+                          }
+                        } catch (_) {}
+                        const error = new Error(text || ("Upload failed: HTTP " + response.status));
+                        error.status = response.status;
+                        throw error;
                       }
                     }
                     uploadInput.value = "";
-                    await refreshList();
+                    await refreshList(false);
+                    setStatus("Upload completed (" + files.length + " file" + (files.length > 1 ? "s" : "") + ")", "success");
                   } catch (e) {
-                    setStatus(e.message, true);
+                    handleApiError(e);
                   }
                 };
 
