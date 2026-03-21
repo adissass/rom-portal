@@ -30,7 +30,11 @@ internal class FileOpsService(
                 isDirectory = doc.isDirectory,
                 sizeBytes = doc.length()
             )
-        }.sortedWith(compareBy<EntryInfo> { !it.isDirectory }.thenBy { it.name.lowercase() })
+        }.sortedWith(
+            compareBy<EntryInfo> { !it.isDirectory }
+                .thenBy { it.name.lowercase() }
+                .thenBy { it.name }
+        )
     }
 
     override fun mkdir(path: String): Result<Unit> = runCatchingApi {

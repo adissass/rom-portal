@@ -200,6 +200,8 @@ internal class RomPortalServer(
                 th, td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; }
                 th { color: var(--muted); font-weight: 600; }
                 .path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+                .crumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+                .crumb-sep { color: var(--muted); }
                 .status { font-size: 13px; margin-top: 8px; color: var(--muted); min-height: 20px; }
                 .status.error { color: var(--danger); }
                 .linklike { color: var(--accent); text-decoration: underline; cursor: pointer; border: 0; background: transparent; padding: 0; }
@@ -211,10 +213,9 @@ internal class RomPortalServer(
                   <h1>RomPortal</h1>
                   <div class="row">
                     <span class="muted">Path:</span>
-                    <span id="pathLabel" class="path"></span>
+                    <div id="breadcrumb" class="crumbs path"></div>
                   </div>
                   <div class="row" style="margin-top:10px;">
-                    <button id="upBtn">Up</button>
                     <input id="mkdirInput" type="text" placeholder="New folder name" />
                     <button id="mkdirBtn">Create Folder</button>
                   </div>
@@ -240,7 +241,7 @@ internal class RomPortalServer(
               </div>
               <script>
                 let currentPath = "";
-                const pathLabel = document.getElementById("pathLabel");
+                const breadcrumbEl = document.getElementById("breadcrumb");
                 const statusEl = document.getElementById("status");
                 const entriesBody = document.getElementById("entriesBody");
                 const mkdirInput = document.getElementById("mkdirInput");
@@ -256,11 +257,42 @@ internal class RomPortalServer(
                   return base + "/" + name;
                 }
 
-                function parentPath(path) {
-                  if (!path) return "";
-                  const parts = path.split("/").filter(Boolean);
-                  parts.pop();
-                  return parts.join("/");
+                function sortEntriesStable(entries) {
+                  return [...entries].sort((a, b) => {
+                    if (a.isDirectory !== b.isDirectory) {
+                      return a.isDirectory ? -1 : 1;
+                    }
+                    const aLower = String(a.name || "").toLowerCase();
+                    const bLower = String(b.name || "").toLowerCase();
+                    if (aLower < bLower) return -1;
+                    if (aLower > bLower) return 1;
+                    return String(a.name || "").localeCompare(String(b.name || ""));
+                  });
+                }
+
+                function renderBreadcrumb() {
+                  breadcrumbEl.innerHTML = "";
+
+                  function addCrumb(label, pathValue) {
+                    const btn = document.createElement("button");
+                    btn.className = "linklike";
+                    btn.textContent = label;
+                    btn.onclick = () => {
+                      currentPath = pathValue;
+                      refreshList();
+                    };
+                    breadcrumbEl.appendChild(btn);
+                  }
+
+                  addCrumb("Root", "");
+                  const segments = currentPath.split("/").filter(Boolean);
+                  for (let i = 0; i < segments.length; i++) {
+                    const sep = document.createElement("span");
+                    sep.className = "crumb-sep";
+                    sep.textContent = "/";
+                    breadcrumbEl.appendChild(sep);
+                    addCrumb(segments[i], segments.slice(0, i + 1).join("/"));
+                  }
                 }
 
                 function formatBytes(bytes) {
@@ -286,9 +318,10 @@ internal class RomPortalServer(
                 async function refreshList() {
                   try {
                     setStatus("Loading...", false);
-                    pathLabel.textContent = "/" + currentPath;
+                    renderBreadcrumb();
                     const data = await apiJson("/api/list?path=" + encodeURIComponent(currentPath));
-                    renderEntries((data && data.entries) ? data.entries : []);
+                    const entries = (data && data.entries) ? data.entries : [];
+                    renderEntries(sortEntriesStable(entries));
                     setStatus("Ready", false);
                   } catch (e) {
                     setStatus(e.message, true);
@@ -389,11 +422,6 @@ internal class RomPortalServer(
                     entriesBody.appendChild(row);
                   }
                 }
-
-                document.getElementById("upBtn").onclick = () => {
-                  currentPath = parentPath(currentPath);
-                  refreshList();
-                };
 
                 document.getElementById("mkdirBtn").onclick = async () => {
                   const name = (mkdirInput.value || "").trim();
