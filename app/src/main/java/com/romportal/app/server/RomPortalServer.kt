@@ -217,6 +217,9 @@ internal class RomPortalServer(
                 .linklike { color: var(--accent); text-decoration: underline; cursor: pointer; border: 0; background: transparent; padding: 0; }
                 .upload-progress-wrap { margin-top: 10px; display: none; }
                 .upload-progress-meta { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+                .failed-uploads { margin-top: 10px; border: 1px solid #fecaca; background: #fff7f7; border-radius: 8px; padding: 8px 10px; }
+                .failed-uploads h3 { margin: 0 0 6px 0; font-size: 13px; color: #991b1b; }
+                .failed-uploads ul { margin: 0; padding-left: 18px; font-size: 12px; color: #7f1d1d; }
                 progress { width: 100%; height: 10px; }
                 .hidden { display: none !important; }
               </style>
@@ -241,6 +244,10 @@ internal class RomPortalServer(
                   <div id="uploadProgressWrap" class="upload-progress-wrap">
                     <div id="uploadProgressMeta" class="upload-progress-meta"></div>
                     <progress id="uploadProgress" value="0" max="100"></progress>
+                  </div>
+                  <div id="failedUploadsWrap" class="failed-uploads hidden">
+                    <h3 id="failedUploadsTitle">Failed uploads</h3>
+                    <ul id="failedUploadsList"></ul>
                   </div>
                   <div id="status" class="status"></div>
                 </div>
@@ -270,6 +277,9 @@ internal class RomPortalServer(
                 const uploadProgressWrap = document.getElementById("uploadProgressWrap");
                 const uploadProgressMeta = document.getElementById("uploadProgressMeta");
                 const uploadProgress = document.getElementById("uploadProgress");
+                const failedUploadsWrap = document.getElementById("failedUploadsWrap");
+                const failedUploadsTitle = document.getElementById("failedUploadsTitle");
+                const failedUploadsList = document.getElementById("failedUploadsList");
                 let authRedirectPending = false;
                 let failedUploads = [];
                 let uploadBusy = false;
@@ -297,7 +307,8 @@ internal class RomPortalServer(
                   if (error && error.status === 401) {
                     return handleSessionExpired();
                   }
-                  setStatus((error && error.message) ? error.message : "Unexpected error", "error");
+                  const message = mapUserMessage(error ? error.status : null, (error && error.message) ? error.message : "");
+                  setStatus(message, "error");
                   return false;
                 }
 
@@ -317,6 +328,43 @@ internal class RomPortalServer(
                   return parsedMessage || fallback;
                 }
 
+                function sanitizePathValue(pathValue) {
+                  return String(pathValue || "").split("/").filter(Boolean).join("/");
+                }
+
+                function updatePathInUrl() {
+                  const params = new URLSearchParams(window.location.search);
+                  if (currentPath) {
+                    params.set("path", currentPath);
+                  } else {
+                    params.delete("path");
+                  }
+                  const query = params.toString();
+                  const nextUrl = window.location.pathname + (query ? ("?" + query) : "");
+                  window.history.replaceState(null, "", nextUrl);
+                }
+
+                function mapUserMessage(status, rawMessage) {
+                  const message = String(rawMessage || "").trim();
+                  const lower = message.toLowerCase();
+                  if (status === 409 || lower.includes("already exists")) {
+                    return "File or folder already exists. Rename and try again.";
+                  }
+                  if (status === 507 || lower.includes("insufficient")) {
+                    return "Not enough free storage. Free space and retry.";
+                  }
+                  if (status === 400 && (lower.includes("traversal") || lower.includes("invalid path") || lower.includes("absolute"))) {
+                    return "Invalid path or folder location.";
+                  }
+                  if (status === 0) {
+                    return "Network error. Check connection and retry.";
+                  }
+                  if (!message) {
+                    return "Unexpected error. Please retry.";
+                  }
+                  return message;
+                }
+
                 function setUploadUiBusy(isBusy) {
                   uploadBusy = isBusy;
                   uploadBtn.disabled = isBusy;
@@ -329,6 +377,22 @@ internal class RomPortalServer(
                     retryFailedBtn.classList.remove("hidden");
                   } else {
                     retryFailedBtn.classList.add("hidden");
+                  }
+                }
+
+                function renderFailedUploads() {
+                  failedUploadsList.innerHTML = "";
+                  if (!failedUploads.length) {
+                    failedUploadsWrap.classList.add("hidden");
+                    failedUploadsTitle.textContent = "Failed uploads";
+                    return;
+                  }
+                  failedUploadsWrap.classList.remove("hidden");
+                  failedUploadsTitle.textContent = "Failed uploads (" + failedUploads.length + ")";
+                  for (const item of failedUploads) {
+                    const li = document.createElement("li");
+                    li.textContent = item.file.name + ": " + item.reason;
+                    failedUploadsList.appendChild(li);
                   }
                 }
 
@@ -381,6 +445,7 @@ internal class RomPortalServer(
                   setUploadUiBusy(true);
                   setRetryButtonVisible(false);
                   failedUploads = [];
+                  renderFailedUploads();
                   try {
                     for (let i = 0; i < files.length; i++) {
                       const file = files[i];
@@ -388,23 +453,23 @@ internal class RomPortalServer(
                         showUploadProgress("Uploading " + file.name + " (" + (i + 1) + "/" + files.length + ")", 0);
                         await uploadSingleFile(file, i, files.length);
                       } catch (e) {
-                        failedUploads.push(file);
+                        const reason = mapUserMessage(e ? e.status : null, e ? e.message : "");
+                        failedUploads.push({ file: file, reason: reason, status: e ? e.status : null });
                         if (e && e.status === 401) {
                           handleSessionExpired();
                           break;
                         }
-                        setStatus("Upload failed for " + file.name + ": " + (e.message || "Unknown error"), "error");
+                        setStatus("Upload failed for " + file.name + ": " + reason, "error");
                       }
                     }
 
                     await refreshList(false);
                     if (failedUploads.length > 0) {
                       setRetryButtonVisible(true);
-                      setStatus(
-                        "Uploaded with failures (" + failedUploads.length + " failed). Use Retry Failed Uploads.",
-                        "error"
-                      );
+                      renderFailedUploads();
+                      setStatus("", "info");
                     } else {
+                      renderFailedUploads();
                       setStatus("Upload completed (" + files.length + " file" + (files.length > 1 ? "s" : "") + ")", "success");
                     }
                   } finally {
@@ -478,6 +543,8 @@ internal class RomPortalServer(
                     if (showLoading) {
                       setStatus("Loading...", "info");
                     }
+                    currentPath = sanitizePathValue(currentPath);
+                    updatePathInUrl();
                     renderBreadcrumb();
                     const data = await apiJson("/api/list?path=" + encodeURIComponent(currentPath));
                     const entries = (data && data.entries) ? data.entries : [];
@@ -574,16 +641,17 @@ internal class RomPortalServer(
                     deleteBtn.className = "danger";
                     deleteBtn.textContent = "Delete";
                     deleteBtn.onclick = async () => {
-                      if (!confirm("Delete " + entry.name + "?")) return;
+                      const entryPath = joinPath(currentPath, entry.name);
+                      const entryType = entry.isDirectory ? "folder" : "file";
+                      if (!confirm("Delete " + entryType + " '" + entryPath + "'? This is permanent.")) return;
                       try {
-                        const path = joinPath(currentPath, entry.name);
                         await apiJson("/api/delete", {
                           method: "POST",
                           headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-                          body: new URLSearchParams({ path: path })
+                          body: new URLSearchParams({ path: entryPath })
                         });
                         await refreshList(false);
-                        setStatus("Deleted " + entry.name, "success");
+                        setStatus("Deleted " + entryType + ": " + entryPath, "success");
                       } catch (e) {
                         handleApiError(e);
                       }
@@ -625,10 +693,11 @@ internal class RomPortalServer(
 
                 retryFailedBtn.onclick = async () => {
                   if (uploadBusy || failedUploads.length === 0) return;
-                  const retryBatch = failedUploads.slice();
+                  const retryBatch = failedUploads.map(item => item.file);
                   await runUploadQueue(retryBatch);
                 };
 
+                currentPath = sanitizePathValue(new URLSearchParams(window.location.search).get("path") || "");
                 refreshList();
               </script>
             </body>
