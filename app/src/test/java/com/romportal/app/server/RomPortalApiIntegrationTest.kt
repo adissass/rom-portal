@@ -24,6 +24,48 @@ import kotlin.random.Random
 
 class RomPortalApiIntegrationTest {
     @Test
+    fun webAssets_arePublicAndMissingFilesReturnNotFound() = testApplication {
+        application {
+            configureRomPortalRoutes(
+                RomPortalRouteConfig(
+                    pin = "123456",
+                    authManager = AuthManager(),
+                    fileOps = FakeFileOpsGateway(),
+                    healthSnapshot = {
+                        HealthSnapshot(
+                            serverStartedAtEpochMs = 1,
+                            uptimeMs = 1,
+                            rootSelected = false,
+                            rootUri = null,
+                            freeSpaceBytes = null,
+                            activeSessions = 0
+                        )
+                    },
+                    loginPageHtml = { "<html><body>login</body></html>" },
+                    fileManagerPageHtml = { "<html><body>ok</body></html>" },
+                    webAsset = { path ->
+                        if (path == "assets/app.js") {
+                            WebAsset("console.log('ok')".encodeToByteArray(), ContentType.Application.JavaScript)
+                        } else {
+                            null
+                        }
+                    }
+                )
+            )
+        }
+
+        val asset = client.get("/web/assets/app.js")
+        assertEquals(HttpStatusCode.OK, asset.status)
+        assertEquals("console.log('ok')", asset.bodyAsText())
+
+        val missing = client.get("/web/assets/missing.js")
+        assertEquals(HttpStatusCode.NotFound, missing.status)
+
+        val unauthenticatedApi = client.get("/api/list?path=")
+        assertEquals(HttpStatusCode.Unauthorized, unauthenticatedApi.status)
+    }
+
+    @Test
     fun authAndFileOps_happyPath() = testApplication {
         val fakeFileOps = FakeFileOpsGateway()
         application {

@@ -13,6 +13,7 @@ import io.ktor.server.application.install
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.request.receiveParameters
 import io.ktor.server.response.header
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
@@ -30,7 +31,8 @@ internal data class RomPortalRouteConfig(
     val onTransferFinished: () -> Unit = {},
     val healthSnapshot: () -> HealthSnapshot,
     val loginPageHtml: () -> String,
-    val fileManagerPageHtml: () -> String
+    val fileManagerPageHtml: () -> String,
+    val webAsset: (String) -> WebAsset? = { null }
 )
 
 internal data class HealthSnapshot(
@@ -47,6 +49,16 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
     install(RequestLoggingPlugin)
 
     routing {
+        get("/web/{asset...}") {
+            val assetPath = call.parameters.getAll("asset").orEmpty().joinToString("/")
+            val asset = config.webAsset(assetPath)
+            if (asset == null) {
+                call.respondText("Not found", status = HttpStatusCode.NotFound)
+                return@get
+            }
+            call.respondBytes(asset.bytes, asset.contentType)
+        }
+
         get("/health") {
             call.respondText(
                 config.healthSnapshot().toJson(),

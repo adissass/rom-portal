@@ -56,6 +56,41 @@ android {
     }
 }
 
+val buildWeb by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Builds the browser UI into Android assets."
+    workingDir(rootProject.file("web"))
+    val appleSilicon = System.getProperty("os.name") == "Mac OS X" &&
+        runCatching {
+            ProcessBuilder("sysctl", "-n", "hw.optional.arm64")
+                .start()
+                .inputStream
+                .bufferedReader()
+                .readText()
+                .trim() == "1"
+        }.getOrDefault(false)
+    if (appleSilicon) {
+        commandLine("arch", "-arm64", "npm", "run", "build")
+    } else {
+        commandLine("npm", "run", "build")
+    }
+    inputs.dir(rootProject.file("web/src"))
+    inputs.files(
+        rootProject.file("web/index.html"),
+        rootProject.file("web/package.json"),
+        rootProject.file("web/package-lock.json"),
+        rootProject.file("web/tsconfig.json"),
+        rootProject.file("web/tsconfig.app.json"),
+        rootProject.file("web/tsconfig.node.json"),
+        rootProject.file("web/vite.config.ts")
+    )
+    outputs.dir(layout.projectDirectory.dir("src/main/assets/web"))
+}
+
+tasks.named("preBuild") {
+    dependsOn(buildWeb)
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.documentfile:documentfile:1.0.1")

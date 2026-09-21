@@ -70,6 +70,7 @@ class RomPortalForegroundService : Service() {
 
     private fun startServer() {
         try {
+            ServiceRuntimeStore.onServerStarting()
             // Promote to foreground immediately, then do heavier startup work.
             ServiceCompat.startForeground(
                 this,
@@ -94,6 +95,7 @@ class RomPortalForegroundService : Service() {
     }
 
     private fun stopServer() {
+        ServiceRuntimeStore.onServerStopping()
         mainHandler.removeCallbacks(warningRunnable)
         mainHandler.removeCallbacks(stopRunnable)
         romPortalServer.stop()

@@ -1,6 +1,14 @@
 # macOS
 .DS_Store
 docs/
+RomPortal-UI-Handoff/
+RomPortal-Brand-Kit-v1.0/
+approved/
+AUDIT-*.md
+README_INTERVIEW_*.md
+migration/
+.understand-anything/
+.worktrees/
 
 # Gradle
 .gradle/
@@ -25,3 +33,6 @@ gradle/gradle-daemon-jvm.properties
 # Local runtime test artifacts
 tmp/
 cookies.txt
+
+# Generated browser bundle
+app/src/main/assets/web/

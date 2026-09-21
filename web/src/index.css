@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  --rp-canvas: light-dark(#f6f5f2, #24272b);
+  --rp-surface: light-dark(#ffffff, #2e3237);
+  --rp-text: light-dark(#24272b, #f6f5f2);
+  --rp-text-muted: light-dark(#656a70, #b9bec4);
+  --rp-border: light-dark(#797e84, #92979d);
+  --rp-divider: light-dark(#d9dbdb, #494f56);
+  --rp-action: light-dark(#24272b, #f6f5f2);
+  --rp-on-action: light-dark(#f6f5f2, #24272b);
+  --rp-focus: light-dark(#24272b, #f6f5f2);
+  --rp-focus-gap: light-dark(#f6f5f2, #24272b);
+  --rp-radius-control: 8px;
+  --rp-radius-panel: 12px;
+  --rp-focus-width: 3px;
+  --rp-focus-offset: 3px;
+  --rp-target-min: 44px;
+  --rp-motion-quick: 120ms;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: var(--rp-text);
+  background: var(--rp-canvas);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100svh; }
+:focus-visible { outline: var(--rp-focus-width) solid var(--rp-focus); outline-offset: var(--rp-focus-offset); }
+@media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition-duration: 0ms !important; } }

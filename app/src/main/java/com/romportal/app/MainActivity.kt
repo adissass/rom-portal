@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -31,9 +32,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import com.romportal.app.service.RomPortalForegroundService
+import com.romportal.app.service.HostRuntimeState
 import com.romportal.app.service.ServiceConfig
 import com.romportal.app.service.ServiceRuntimeStore
-import com.romportal.app.server.ServerState
+import com.romportal.app.ui.HostControlMinHeight
+import com.romportal.app.ui.RomPortalTheme
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
@@ -65,30 +68,35 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
 
         setContent {
-            val serverState by ServiceRuntimeStore.serverState.collectAsState()
-            val serviceError by ServiceRuntimeStore.serverError.collectAsState()
+            val hostState by ServiceRuntimeStore.hostState.collectAsState()
 
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            RomPortalTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
                     RomPortalHome(
                         selectedRootUri = selectedRootUri,
-                        serverState = serverState,
-                        serverError = localError ?: serviceError,
+                        hostState = hostState,
+                        localError = localError,
                         onPickFolder = { pickFolderLauncher.launch(null) },
                         onToggleServer = {
-                            if (serverState == null) {
-                                if (selectedRootUri.isNullOrBlank()) {
-                                    localError = getString(R.string.error_select_folder_first)
-                                } else {
-                                    localError = null
-                                    ContextCompat.startForegroundService(
-                                        this@MainActivity,
-                                        RomPortalForegroundService.startIntent(this@MainActivity)
-                                    )
+                            when (hostState) {
+                                HostRuntimeState.Stopped, is HostRuntimeState.Error -> {
+                                    if (selectedRootUri.isNullOrBlank()) {
+                                        localError = getString(R.string.error_select_folder_first)
+                                    } else {
+                                        localError = null
+                                        ContextCompat.startForegroundService(
+                                            this@MainActivity,
+                                            RomPortalForegroundService.startIntent(this@MainActivity)
+                                        )
+                                    }
                                 }
-                            } else {
-                                localError = null
-                                startService(RomPortalForegroundService.stopIntent(this@MainActivity))
+
+                                is HostRuntimeState.Running -> {
+                                    localError = null
+                                    startService(RomPortalForegroundService.stopIntent(this@MainActivity))
+                                }
+
+                                HostRuntimeState.Starting, HostRuntimeState.Stopping -> Unit
                             }
                         }
                     )
@@ -124,8 +132,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun RomPortalHome(
     selectedRootUri: String?,
-    serverState: ServerState?,
-    serverError: String?,
+    hostState: HostRuntimeState,
+    localError: String?,
     onPickFolder: () -> Unit,
     onToggleServer: () -> Unit
 ) {
@@ -143,31 +151,59 @@ private fun RomPortalHome(
             textAlign = TextAlign.Center
         )
 
-        if (serverState == null) {
-            Text(text = stringResource(R.string.server_stopped), style = MaterialTheme.typography.bodyLarge)
-        } else {
-            Text(
-                text = stringResource(R.string.server_url_prefix, serverState.lanUrl),
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center
+        when (hostState) {
+            is HostRuntimeState.Running -> {
+                val server = hostState.server
+                Text(
+                    text = stringResource(R.string.server_url_prefix, server.lanUrl),
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = stringResource(R.string.server_pin_prefix, server.pin),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+
+            HostRuntimeState.Starting -> Text(
+                text = stringResource(R.string.server_starting),
+                style = MaterialTheme.typography.bodyLarge
             )
-            Text(
-                text = stringResource(R.string.server_pin_prefix, serverState.pin),
+
+            HostRuntimeState.Stopping -> Text(
+                text = stringResource(R.string.server_stopping),
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            HostRuntimeState.Stopped, is HostRuntimeState.Error -> Text(
+                text = stringResource(R.string.server_stopped),
                 style = MaterialTheme.typography.bodyLarge
             )
         }
 
-        if (!serverError.isNullOrBlank()) {
-            Text(text = serverError, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        val error = localError ?: (hostState as? HostRuntimeState.Error)?.message
+        if (!error.isNullOrBlank()) {
+            Text(text = error, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onPickFolder) {
+        Button(onClick = onPickFolder, modifier = Modifier.heightIn(min = HostControlMinHeight)) {
             Text(text = stringResource(R.string.pick_folder))
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onToggleServer) {
-            Text(text = if (serverState == null) stringResource(R.string.start_server) else stringResource(R.string.stop_server))
+        Button(
+            onClick = onToggleServer,
+            enabled = hostState !is HostRuntimeState.Starting && hostState !is HostRuntimeState.Stopping,
+            modifier = Modifier.heightIn(min = HostControlMinHeight)
+        ) {
+            Text(
+                text = when (hostState) {
+                    is HostRuntimeState.Running -> stringResource(R.string.stop_server)
+                    HostRuntimeState.Starting -> stringResource(R.string.server_starting)
+                    HostRuntimeState.Stopping -> stringResource(R.string.server_stopping)
+                    HostRuntimeState.Stopped, is HostRuntimeState.Error -> stringResource(R.string.start_server)
+                }
+            )
         }
     }
 }
