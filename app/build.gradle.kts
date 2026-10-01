@@ -69,7 +69,7 @@ val buildWeb by tasks.registering(Exec::class) {
         rootProject.file("web/tsconfig.json"),
         rootProject.file("web/tsconfig.app.json"),
         rootProject.file("web/tsconfig.node.json"),
-        rootProject.file("web/vite.config.ts")
+        rootProject.file("web/vite.config.ts"),
     )
     outputs.dir(layout.projectDirectory.dir("src/main/assets/web"))
 }
