@@ -54,6 +54,7 @@ internal class FileOpsService(
     }
 
     override fun delete(path: String): Result<Unit> = runCatchingApi {
+        requireNonRootPath(path)
         val target = resolveExisting(path, mustBeDirectory = null)
         if (!target.delete()) {
             throw FileApiException(HttpStatusCode.InternalServerError, "Failed to delete entry")
@@ -246,4 +247,12 @@ internal fun normalizePathSegments(path: String?): List<String> {
                 else -> segment
             }
         }
+}
+
+internal fun requireNonRootPath(path: String): List<String> {
+    val segments = normalizePathSegments(path)
+    if (segments.isEmpty()) {
+        throw FileApiException(HttpStatusCode.BadRequest, "Root path cannot be deleted")
+    }
+    return segments
 }

@@ -40,10 +40,30 @@ Install these before using RomPortal:
 - Android Studio (latest stable)
 - Android SDK Platform-Tools (`adb`)
 - An Android emulator (ARM image recommended on Apple Silicon) or a physical Android device
+- Node.js 22.12.0 or later and npm (for the browser UI build)
 
 Recommended checks:
 ```bash
 adb version
+node --version
+npm --version
+```
+
+## Browser UI development
+
+The browser UI source lives in `web/`. Its generated bundle is packaged into Android assets and is not committed.
+
+```bash
+cd web
+npm ci
+npm run typecheck
+npm run build
+```
+
+Run the Android build from the repository root after installing browser dependencies. It invokes the browser build before packaging assets:
+
+```bash
+./gradlew :app:assembleDebug
 ```
 
 If `adb` is not found, add your Android SDK `platform-tools` directory to your shell `PATH`.

@@ -2,6 +2,7 @@ package com.romportal.app.server
 
 import io.ktor.http.HttpStatusCode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class PathValidationTest {
@@ -39,5 +40,16 @@ class PathValidationTest {
     fun normalizePath_rejectsBackslashInSegment() {
         val ex = runCatching { normalizePathSegments("ROMs\\PS1") }.exceptionOrNull() as FileApiException
         assertEquals(HttpStatusCode.BadRequest, ex.status)
+    }
+
+    @Test
+    fun delete_rejectsRootPath() {
+        val ex = runCatching { requireNonRootPath(" ") }.exceptionOrNull() as FileApiException
+        assertEquals(HttpStatusCode.BadRequest, ex.status)
+    }
+
+    @Test
+    fun webAssets_rejectTraversalSegments() {
+        assertFalse(webAssetPathIsSafe("assets/../app.js"))
     }
 }
