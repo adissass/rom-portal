@@ -60,20 +60,7 @@ val buildWeb by tasks.registering(Exec::class) {
     group = "build"
     description = "Builds the browser UI into Android assets."
     workingDir(rootProject.file("web"))
-    val appleSilicon = System.getProperty("os.name") == "Mac OS X" &&
-        runCatching {
-            ProcessBuilder("sysctl", "-n", "hw.optional.arm64")
-                .start()
-                .inputStream
-                .bufferedReader()
-                .readText()
-                .trim() == "1"
-        }.getOrDefault(false)
-    if (appleSilicon) {
-        commandLine("arch", "-arm64", "npm", "run", "build")
-    } else {
-        commandLine("npm", "run", "build")
-    }
+    commandLine("npm", "run", "build")
     inputs.dir(rootProject.file("web/src"))
     inputs.files(
         rootProject.file("web/index.html"),

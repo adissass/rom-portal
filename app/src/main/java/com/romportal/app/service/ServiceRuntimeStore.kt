@@ -14,24 +14,20 @@ internal sealed interface HostRuntimeState {
 
 internal object ServiceRuntimeStore {
     private val _serverState = MutableStateFlow<ServerState?>(null)
-    private val _serverError = MutableStateFlow<String?>(null)
     private val _hostState = MutableStateFlow<HostRuntimeState>(HostRuntimeState.Stopped)
 
     val serverState: StateFlow<ServerState?> = _serverState
-    val serverError: StateFlow<String?> = _serverError
     val hostState: StateFlow<HostRuntimeState> = _hostState
     private var authenticatedActivityListener: (() -> Unit)? = null
     private var transferStartedListener: (() -> Unit)? = null
     private var transferFinishedListener: (() -> Unit)? = null
 
     fun onServerStarting() {
-        _serverError.value = null
         _hostState.value = HostRuntimeState.Starting
     }
 
     fun onServerStarted(state: ServerState) {
         _serverState.value = state
-        _serverError.value = null
         _hostState.value = HostRuntimeState.Running(state)
     }
 
@@ -41,13 +37,11 @@ internal object ServiceRuntimeStore {
 
     fun onServerStartFailed(message: String) {
         _serverState.value = null
-        _serverError.value = message
         _hostState.value = HostRuntimeState.Error(message)
     }
 
     fun onServerStopped() {
         _serverState.value = null
-        _serverError.value = null
         if (_hostState.value !is HostRuntimeState.Error) {
             _hostState.value = HostRuntimeState.Stopped
         }

@@ -40,7 +40,7 @@ Install these before using RomPortal:
 - Android Studio (latest stable)
 - Android SDK Platform-Tools (`adb`)
 - An Android emulator (ARM image recommended on Apple Silicon) or a physical Android device
-- Node.js 22 and npm (for the browser UI build)
+- Node.js 22.12.0 or later and npm (for the browser UI build)
 
 Recommended checks:
 ```bash
