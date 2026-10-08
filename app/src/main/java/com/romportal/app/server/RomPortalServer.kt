@@ -58,7 +58,7 @@ internal class RomPortalServer(
                     onTransferStarted = onTransferStarted,
                     onTransferFinished = onTransferFinished,
                     healthSnapshot = { buildHealthSnapshot(startMs) },
-                    loginPageHtml = { loginHtml() },
+                    loginPageHtml = { loginPageHtml() },
                     fileManagerPageHtml = { fileManagerStubHtml() },
                     webAsset = { path -> loadWebAsset(context, path) }
                 )
@@ -134,7 +134,9 @@ internal class RomPortalServer(
         return "127.0.0.1"
     }
 
-    private fun loginHtml(): String {
+    private fun loginPageHtml(): String {
+        loadWebAsset(context, "index.html")?.let { return it.bytes.toString(Charsets.UTF_8) }
+
         return """
             <html>
             <head><meta name="viewport" content="width=device-width,initial-scale=1"></head>

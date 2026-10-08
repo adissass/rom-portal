@@ -31,6 +31,7 @@ private fun webAssetContentType(path: String): ContentType {
         "js" -> ContentType.Application.JavaScript
         "json", "map" -> ContentType.Application.Json
         "svg" -> ContentType.Image.SVG
+        "ttf" -> ContentType("font", "ttf")
         "png" -> ContentType.Image.PNG
         "webp" -> ContentType("image", "webp")
         else -> ContentType.Application.OctetStream
