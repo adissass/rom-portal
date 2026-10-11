@@ -68,6 +68,29 @@ Run the Android build from the repository root after installing browser dependen
 
 If `adb` is not found, add your Android SDK `platform-tools` directory to your shell `PATH`.
 
+### Fast browser design preview
+
+From the worktree containing the UI change, run `npm ci --prefix web` once, then:
+
+```bash
+npm run dev:mock --prefix web
+```
+
+Open the URL printed by Vite (under `/web/`). Edits to React and CSS appear with hot reload; no Android build, emulator, PIN, or `adb` forwarding is needed. This mode exists only in the Vite development server. Production `npm run build` does not package its mock API or sample data.
+
+Use these six-digit PINs to inspect the login states:
+
+| PIN | Preview response |
+| --- | --- |
+| `000000` | Invalid PIN (`401`) |
+| `999999` | Rate limited (`429`, 30 seconds) |
+| `888888` | Host unavailable (`503`) |
+| Any other six digits | Success (`200`) and mock session cookie |
+
+After mock sign-in, `/api/list?path=` returns a sample tree with `BIOS`, `ROMs`, and `Saves`. Try `path=ROMs/Empty%20Collection` for an empty folder or `path=ROMs/Handheld` for large-file rows. The preview is read-only; it does not create real files. The current production file manager remains the Android-served page until its React replacement is built.
+
+For design handoff, share the preview command, screenshots at the issue's required widths and themes, and any unverified interactions. Before accepting a change, use the Android run path below to check the packaged UI, real PIN/session behavior, and SAF-backed file operations. The mock preview cannot verify those integrations.
+
 ## Quick Start (Use the Product)
 ### 1) Run the app
 1. Open project in Android Studio.
