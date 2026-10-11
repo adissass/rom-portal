@@ -1,15 +1,48 @@
+@import "tailwindcss";
+
 @font-face { font-family: Inter; src: url('./assets/fonts/Inter-Variable.ttf') format('truetype'); font-display: swap; }
 @font-face { font-family: 'JetBrains Mono'; src: url('./assets/fonts/JetBrainsMono-Variable.ttf') format('truetype'); font-display: swap; }
 
 :root {
   color-scheme: light dark;
-  --canvas: light-dark(#f6f5f2, #24272b);
-  --text: light-dark(#24272b, #f6f5f2);
-  --muted: light-dark(#656a70, #b9bec4);
-  --border: light-dark(#797e84, #92979d);
-  --disabled: light-dark(#e4e5e3, #3c4147);
-  --danger: light-dark(#a3343c, #f1adb3);
-  --focus: light-dark(#24272b, #f6f5f2);
+  --rp-canvas: light-dark(#f6f5f2, #24272b);
+  --rp-surface: light-dark(#ffffff, #2e3237);
+  --rp-surface-subtle: light-dark(#ecedea, #383d43);
+  --rp-text: light-dark(#24272b, #f6f5f2);
+  --rp-text-muted: light-dark(#656a70, #b9bec4);
+  --rp-border: light-dark(#797e84, #92979d);
+  --rp-divider: light-dark(#d9dbdb, #494f56);
+  --rp-action: light-dark(#24272b, #f6f5f2);
+  --rp-on-action: light-dark(#f6f5f2, #24272b);
+  --rp-focus: light-dark(#24272b, #f6f5f2);
+  --rp-focus-gap: light-dark(#f6f5f2, #24272b);
+  --rp-disabled: light-dark(#e4e5e3, #3c4147);
+  --rp-danger: light-dark(#a3343c, #f1adb3);
+  --rp-radius-control: 8px;
+  --rp-radius-panel: 12px;
+  --rp-focus-width: 3px;
+  --rp-focus-offset: 3px;
+  --rp-target-min: 44px;
+  --rp-motion-quick: 120ms;
+  --background: var(--rp-canvas);
+  --foreground: var(--rp-text);
+  --primary: var(--rp-action);
+  --primary-foreground: var(--rp-on-action);
+  --secondary: var(--rp-surface-subtle);
+  --secondary-foreground: var(--rp-text);
+  --muted: var(--rp-surface-subtle);
+  --muted-foreground: var(--rp-text-muted);
+  --border: var(--rp-border);
+  --input: var(--rp-surface);
+  --ring: var(--rp-focus);
+  --destructive: var(--rp-danger);
+  --radius-md: var(--rp-radius-control);
+  --radius-lg: var(--rp-radius-control);
+  --canvas: var(--rp-canvas);
+  --text: var(--rp-text);
+  --disabled: var(--rp-disabled);
+  --danger: var(--rp-danger);
+  --focus: var(--rp-focus);
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   color: var(--text);
   background: var(--canvas);
@@ -18,12 +51,30 @@
   -webkit-font-smoothing: antialiased;
 }
 
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --radius-md: var(--rp-radius-control);
+  --radius-lg: var(--rp-radius-control);
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100svh; }
 button, input { font: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .login-page { min-height: 100svh; max-width: 1200px; margin: 0 auto; padding: 32px; }
-.site-header { min-height: 65px; display: flex; align-items: flex-start; border-bottom: 1px solid light-dark(#d9dbdb, #494f56); padding: 6px 4px 16px; color: var(--muted); font-size: 12px; line-height: 18px; }
+.site-header { min-height: 65px; display: flex; align-items: flex-start; border-bottom: 1px solid var(--rp-divider); padding: 6px 4px 16px; color: var(--muted); font-size: 12px; line-height: 18px; }
 .brand { display: flex; align-items: center; gap: 16px; color: var(--text); font-size: 14px; font-weight: 600; line-height: 20px; }
 .brand-symbol { display: block; width: 32px; height: 32px; }
 .login-panel { width: min(100%, 408px); margin: 64px auto 0; }
@@ -32,15 +83,13 @@ h1 { margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spa
 .host-address { margin: 0 0 22px; font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 20px; }
 label { display: block; margin-bottom: 8px; font-size: 14px; line-height: 20px; font-weight: 600; }
 .pin-row { display: flex; gap: 8px; align-items: stretch; }
-.input { min-width: 0; height: 48px; flex: 1; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 16px; line-height: 24px; }
-.input::placeholder { color: var(--text); opacity: 0.55; }
-.input[aria-invalid='true'] { border: 2px solid var(--danger); }
-.input:disabled { color: var(--muted); background: var(--disabled); }
-.button { min-height: 44px; border: 1px solid transparent; border-radius: 8px; padding: 8px 16px; font-size: 14px; line-height: 20px; font-weight: 600; cursor: pointer; transition: background-color 120ms, color 120ms; }
-.button:disabled { cursor: not-allowed; color: var(--muted); background: var(--disabled); border-color: var(--border); }
-.secondary-button { min-width: 72px; background: transparent; color: var(--text); border-color: var(--border); }
-.primary-button { width: 100%; margin-top: 8px; background: var(--text); color: var(--canvas); }
+.login-input { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 16px; line-height: 24px; }
+.login-input::placeholder { color: var(--text); opacity: 0.55; }
+.reveal-button { min-width: 72px; }
+.primary-button { width: 100%; margin-top: 8px; }
 .form-message { min-height: 20px; margin: 8px 0 0; color: var(--danger); font-size: 14px; line-height: 20px; }
+.form-message p { margin: 0; }
+.form-message p + p { margin-top: 4px; }
 .network-help { margin: 20px 0 0; color: var(--muted); font-size: 12px; line-height: 18px; }
 
 @media (max-width: 1023px) { .login-page { padding: 24px; } }

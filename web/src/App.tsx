@@ -12,19 +12,24 @@ const messages: Record<Exclude<Message, null>, string> = {
   validation: 'Enter a six-digit PIN.',
   invalid: 'That PIN doesn’t match. Check your handheld and try again.',
   rateLimited: 'Too many attempts. Wait before trying again.',
-  unavailable: 'Host unavailable. Check RomPortal on your handheld, then try again.',
+  unavailable: 'Host unavailable.',
 }
+
+const unavailableHelp = 'Check RomPortal on your handheld. If it stopped, start it again and use the new address and PIN.'
 
 function App() {
   const [pin, setPin] = useState('')
   const [revealed, setRevealed] = useState(false)
   const [pending, setPending] = useState(false)
   const [coolingDown, setCoolingDown] = useState(false)
+  const [cooldownMs, setCooldownMs] = useState(30_000)
   const [message, setMessage] = useState<Message>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (message === 'validation' || message === 'invalid') inputRef.current?.focus()
+    if (message !== 'validation' && message !== 'invalid') return
+    inputRef.current?.focus()
+    if (message === 'invalid') inputRef.current?.select()
   }, [message])
 
   useEffect(() => {
@@ -32,21 +37,27 @@ function App() {
     const timer = window.setTimeout(() => {
       setCoolingDown(false)
       setMessage(null)
-    }, 30_000)
+    }, cooldownMs)
     return () => window.clearTimeout(timer)
-  }, [coolingDown])
+  }, [cooldownMs, coolingDown])
+
+  function updatePin(value: string) {
+    setPin(value)
+    if (!coolingDown) setMessage(null)
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (pending || coolingDown) return
-    if (!validatePin(pin)) {
+    const submittedPin = pin.trim()
+    if (!validatePin(submittedPin)) {
       setMessage('validation')
       return
     }
 
     setPending(true)
     setMessage(null)
-    const result = await submitPin(pin)
+    const result = await submitPin(submittedPin)
     if (result.kind === 'success') {
       window.location.assign('/')
       return
@@ -54,6 +65,7 @@ function App() {
 
     setPending(false)
     if (result.kind === 'rateLimited') {
+      setCooldownMs(result.retryAfterMs ?? 30_000)
       setCoolingDown(true)
       setMessage('rateLimited')
       return
@@ -62,7 +74,7 @@ function App() {
   }
 
   const disabled = pending || coolingDown
-  const hasError = message !== null
+  const hasError = message === 'validation' || message === 'invalid'
 
   return (
     <main className="login-page">
@@ -95,14 +107,23 @@ function App() {
               maxLength={6}
               placeholder="6-digit PIN"
               value={pin}
-              onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={(event) => updatePin(event.target.value)}
+              onPaste={(event) => {
+                event.preventDefault()
+                const selectionStart = event.currentTarget.selectionStart ?? pin.length
+                const selectionEnd = event.currentTarget.selectionEnd ?? pin.length
+                const pastedPin = event.clipboardData.getData('text').trim()
+                updatePin(`${pin.slice(0, selectionStart)}${pastedPin}${pin.slice(selectionEnd)}`)
+              }}
+              className="login-input"
               disabled={disabled}
               aria-invalid={hasError || undefined}
               aria-describedby={message ? 'pin-message' : undefined}
             />
             <Button
               type="button"
-              className="secondary-button reveal-button"
+              variant="outline"
+              className="reveal-button"
               disabled={disabled}
               onClick={() => setRevealed((value) => !value)}
             >
@@ -110,9 +131,10 @@ function App() {
             </Button>
           </div>
 
-          <p id="pin-message" className="form-message" aria-live="polite">
-            {message ? messages[message] : ''}
-          </p>
+          <div id="pin-message" className="form-message" aria-live="polite">
+            {message && <p>{messages[message]}</p>}
+            {message === 'unavailable' && <p>{unavailableHelp}</p>}
+          </div>
 
           <Button type="submit" className="primary-button" disabled={disabled}>
             {pending ? 'Checking PIN…' : coolingDown ? 'Wait to try again' : 'Open files'}
