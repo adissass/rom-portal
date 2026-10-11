@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import symbolInk from './assets/icons/symbol-micro-ink.svg'
-import symbolWhite from './assets/icons/symbol-micro-white.svg'
+import symbolWebLight from './assets/icons/symbol-web-light.svg'
+import symbolWebDark from './assets/icons/symbol-web-dark.svg'
 import { Button } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { submitPin, validatePin } from './lib/login'
@@ -69,8 +69,8 @@ function App() {
       <header className="site-header">
         <div className="brand">
           <picture>
-            <source media="(prefers-color-scheme: dark)" srcSet={symbolWhite} />
-            <img src={symbolInk} alt="" className="brand-symbol" />
+            <source media="(prefers-color-scheme: dark)" srcSet={symbolWebDark} />
+            <img src={symbolWebLight} alt="" className="brand-symbol" />
           </picture>
           <span>Browser</span>
         </div>
