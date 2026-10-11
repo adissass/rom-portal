@@ -23,10 +23,9 @@ body { margin: 0; min-width: 320px; min-height: 100svh; }
 button, input { font: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .login-page { min-height: 100svh; max-width: 1200px; margin: 0 auto; padding: 32px; }
-.site-header { min-height: 65px; display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid light-dark(#d9dbdb, #494f56); padding: 6px 4px 16px; color: var(--muted); font-size: 12px; line-height: 18px; }
+.site-header { min-height: 65px; display: flex; align-items: flex-start; border-bottom: 1px solid light-dark(#d9dbdb, #494f56); padding: 6px 4px 16px; color: var(--muted); font-size: 12px; line-height: 18px; }
 .brand { display: flex; align-items: center; gap: 16px; color: var(--text); font-size: 14px; font-weight: 600; line-height: 20px; }
-.brand-symbol { display: block; width: 36px; height: 36px; }
-.network-label { padding-top: 10px; }
+.brand-symbol { display: block; width: 32px; height: 32px; }
 .login-panel { width: min(100%, 408px); margin: 64px auto 0; }
 h1 { margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -0.6px; }
 .login-help { margin: 16px 0 18px; color: var(--muted); font-size: 16px; line-height: 24px; }
@@ -34,7 +33,7 @@ h1 { margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spa
 label { display: block; margin-bottom: 8px; font-size: 14px; line-height: 20px; font-weight: 600; }
 .pin-row { display: flex; gap: 8px; align-items: stretch; }
 .input { min-width: 0; height: 48px; flex: 1; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 16px; line-height: 24px; }
-.input::placeholder { color: var(--text); opacity: 1; }
+.input::placeholder { color: var(--text); opacity: 0.55; }
 .input[aria-invalid='true'] { border: 2px solid var(--danger); }
 .input:disabled { color: var(--muted); background: var(--disabled); }
 .button { min-height: 44px; border: 1px solid transparent; border-radius: 8px; padding: 8px 16px; font-size: 14px; line-height: 20px; font-weight: 600; cursor: pointer; transition: background-color 120ms, color 120ms; }

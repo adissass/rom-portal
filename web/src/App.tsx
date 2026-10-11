@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import symbolInk from './assets/icons/symbol-ink.svg'
-import symbolWhite from './assets/icons/symbol-white.svg'
+import symbolInk from './assets/icons/symbol-micro-ink.svg'
+import symbolWhite from './assets/icons/symbol-micro-white.svg'
 import { Button } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { submitPin, validatePin } from './lib/login'
@@ -74,7 +74,6 @@ function App() {
           </picture>
           <span>Browser</span>
         </div>
-        <span className="network-label">Local network</span>
       </header>
 
       <section className="login-panel" aria-labelledby="login-title">
