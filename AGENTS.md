@@ -4,7 +4,7 @@
 
 - GitHub Issues is the issue tracker; the **RomPortal UI Overhaul** GitHub Project tracks workflow status. Read the issue, comments, project status, and linked design references before grooming, implementation, or review. The issue defines scope and acceptance criteria; raise conflicts with the code or handoff during grooming.
 - Read `README.md` for product behavior and local commands. Read `.github/workflows/android-ci.yml` for the current CI checks; use the actual scripts and Gradle tasks rather than copying commands into this file.
-- For browser UI work, use the approved handoff at `../rom-portal-archive-2026-09-19/RomPortal-UI-Handoff/Approved/` while it remains outside this repository. Its `specs/`, `approved-copy.json`, `screens/`, `assets/`, and `fonts/` are the design references. The sibling archive is local to this workstation: if it is absent, obtain the approved handoff before claiming design fidelity. Update this pointer when the handoff is committed here.
+- For browser UI work on this workstation, use the approved handoff at `/Users/dev/wamzuu/rom-portal-workspace/references/approved-ui/`. Its `specs/`, `approved-copy.json`, `screens/`, `assets/`, and `fonts/` are the design references. This directory is outside Git; if it is absent, obtain the approved handoff before claiming design fidelity.
 
 ## Local workspace notes
 
