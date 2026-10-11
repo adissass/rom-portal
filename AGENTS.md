@@ -9,7 +9,7 @@
 ## Local workspace notes
 
 - On Apple Silicon, use an ARM64 JDK 21 and ARM64 Node 22.12.0 (pinned in `.nvmrc`) for the combined Gradle/web build. The installed x64 JDK 21 can launch `buildWeb` in x64 mode against ARM `web/node_modules`, causing Vite/Rolldown native-binding errors. For terminal builds, set `JAVA_HOME=$(/usr/libexec/java_home -v 21 -a arm64)` and put `$HOME/Library/Node/22.12.0/bin` first on `PATH`; set Android Studio's Gradle JDK to the same ARM JDK. Run `npm ci --prefix web` after switching Node versions.
-- Before using the shadcn CLI in `web/`, inspect its generated diff. With the current `components.json`, shadcn 4.21 wrote source under a literal `web/@/` directory and omitted dependencies required by that generated source. Keep only reviewed output under `web/src/`.
+- Keep the `@/*` TypeScript path alias in both `web/tsconfig.json` and `web/tsconfig.app.json`; shadcn CLI 4.21.4 reads the root config and otherwise writes aliases under a literal `web/@/` directory. Its Button registry item lists only `cn` as a dependency, but its source also imports `class-variance-authority` and `radix-ui`. Install those packages when adding Button, and inspect generated imports before applying other components. Keep only reviewed output under `web/src/`.
 
 ## Issue and change workflow
 
