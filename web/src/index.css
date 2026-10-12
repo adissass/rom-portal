@@ -33,7 +33,7 @@
   --muted: var(--rp-surface-subtle);
   --muted-foreground: var(--rp-text-muted);
   --border: var(--rp-border);
-  --input: var(--rp-surface);
+  --input: var(--rp-border);
   --ring: var(--rp-focus);
   --destructive: var(--rp-danger);
   --radius-md: var(--rp-radius-control);
