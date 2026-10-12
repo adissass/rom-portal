@@ -17,7 +17,7 @@ const messages: Record<Exclude<Message, null>, string> = {
 
 const unavailableHelp = 'Check RomPortal on your handheld. If it stopped, start it again and use the new address and PIN.'
 
-function App() {
+function App({ onSignedIn, expired = false }: { onSignedIn?: () => void; expired?: boolean }) {
   const [pin, setPin] = useState('')
   const [revealed, setRevealed] = useState(false)
   const [pending, setPending] = useState(false)
@@ -25,6 +25,10 @@ function App() {
   const [cooldownMs, setCooldownMs] = useState(30_000)
   const [message, setMessage] = useState<Message>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (expired) inputRef.current?.focus()
+  }, [expired])
 
   useEffect(() => {
     if (message !== 'validation' && message !== 'invalid') return
@@ -59,6 +63,8 @@ function App() {
     setMessage(null)
     const result = await submitPin(submittedPin)
     if (result.kind === 'success') {
+      setPin('')
+      if (onSignedIn) { onSignedIn(); return }
       window.location.assign('/')
       return
     }
@@ -91,6 +97,7 @@ function App() {
       <section className="login-panel" aria-labelledby="login-title">
         <h1 id="login-title">Open your folder.</h1>
         <p className="login-help">Enter the PIN shown in RomPortal on your handheld.</p>
+        {expired && <p id="session-expired" role="status">Enter the PIN again to continue.</p>}
         <p className="host-address">{window.location.host}</p>
 
         <form onSubmit={handleSubmit} noValidate>
@@ -118,7 +125,7 @@ function App() {
               className="login-input"
               disabled={disabled}
               aria-invalid={hasError || undefined}
-              aria-describedby={message ? 'pin-message' : undefined}
+              aria-describedby={[expired && 'session-expired', message && 'pin-message'].filter(Boolean).join(' ') || undefined}
             />
             <Button
               type="button"

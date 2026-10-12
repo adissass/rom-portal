@@ -87,7 +87,9 @@ Use these six-digit PINs to inspect the login states:
 | `888888` | Host unavailable (`503`) |
 | Any other six digits | Success (`200`) and mock session cookie |
 
-After mock sign-in, `/api/list?path=` returns a sample tree with `BIOS`, `ROMs`, and `Saves`. Try `path=ROMs/Empty%20Collection` for an empty folder or `path=ROMs/Handheld` for large-file rows. The preview is read-only; it does not create real files. The current production file manager remains the Android-served page until its React replacement is built.
+After mock sign-in, the React browser lists a sample tree with `BIOS`, `ROMs`, and `Saves`. Open `ROMs/Empty Collection` for an empty folder or `ROMs/Handheld` for large-file rows. Both the preview and this Sprint 2 browser are read-only; upload and mutation controls arrive in later sprints.
+
+Authenticated `/api/list` responses retain `entries` and add `rootName`, the selected folder's display name. No device path is exposed. Numeric `sizeBytes` remains unchanged: some providers return zero for unknown length, which this sprint displays as zero. Missing or invalid received sizes display “Size unavailable.”
 
 For design handoff, share the preview command, screenshots at the issue's required widths and themes, and any unverified interactions. Before accepting a change, use the Android run path below to check the packaged UI, real PIN/session behavior, and SAF-backed file operations. The mock preview cannot verify those integrations.
 

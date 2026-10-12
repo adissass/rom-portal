@@ -103,6 +103,10 @@ class RomPortalApiIntegrationTest {
             ?.substringBefore(';')
             ?: error("missing auth cookie")
 
+        val listing = client.get("/api/list?path=") { header(HttpHeaders.Cookie, cookie) }
+        assertEquals(HttpStatusCode.OK, listing.status)
+        assertTrue(listing.bodyAsText().contains("\"rootName\":\"Selected folder\""))
+
         val mkdirResponse = client.post("/api/mkdir") {
             header(HttpHeaders.Cookie, cookie)
             header(HttpHeaders.ContentType, ContentType.Application.FormUrlEncoded.toString())

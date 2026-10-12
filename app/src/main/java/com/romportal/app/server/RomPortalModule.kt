@@ -32,7 +32,8 @@ internal data class RomPortalRouteConfig(
     val healthSnapshot: () -> HealthSnapshot,
     val loginPageHtml: () -> String,
     val fileManagerPageHtml: () -> String,
-    val webAsset: (String) -> WebAsset? = { null }
+    val webAsset: (String) -> WebAsset? = { null },
+    val rootDisplayName: () -> String = { "Selected folder" }
 )
 
 internal data class HealthSnapshot(
@@ -121,7 +122,9 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
 
         get("/") {
             if (!call.isAuthenticated(config.authManager)) {
-                call.respondRedirect("/login")
+                val path = call.request.queryParameters["path"].orEmpty()
+                val destination = if (path.isEmpty()) "/login" else "/login?path=" + java.net.URLEncoder.encode(path, "UTF-8")
+                call.respondRedirect(destination)
                 return@get
             }
 
@@ -147,7 +150,7 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
                 result.onSuccess { entries ->
                     config.onAuthenticatedFileApiSuccess()
                     call.respondText(
-                        toEntriesJson(entries),
+                        toEntriesJson(entries, config.rootDisplayName()),
                         contentType = ContentType.Application.Json,
                         status = HttpStatusCode.OK
                     )
@@ -312,7 +315,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.respondApiError(e
     )
 }
 
-private fun toEntriesJson(entries: List<EntryInfo>): String {
+private fun toEntriesJson(entries: List<EntryInfo>, rootName: String): String {
     val items = entries.joinToString(separator = ",") { entry ->
         "{" +
             "\"name\":\"${escapeJson(entry.name)}\"," +
@@ -320,7 +323,7 @@ private fun toEntriesJson(entries: List<EntryInfo>): String {
             "\"sizeBytes\":${entry.sizeBytes}" +
             "}"
     }
-    return "{\"entries\":[${items}]}"
+    return "{\"entries\":[${items}],\"rootName\":\"${escapeJson(rootName)}\"}"
 }
 
 private fun escapeJson(value: String): String {
