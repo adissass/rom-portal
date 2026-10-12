@@ -112,6 +112,24 @@ label { display: block; margin-bottom: 8px; font-size: 14px; line-height: 20px; 
 .breadcrumbs button:disabled { color: var(--rp-text); }
 .files-toolbar { display: flex; gap: 12px; margin-bottom: 16px; }
 .files-toolbar [data-slot='button'] { height: 44px; }
+.files-toolbar { flex-wrap: wrap; }
+.file-table th:nth-child(2) { width: 100px; text-align: right; }
+.file-table td:nth-child(2) { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding-top: 22px; }
+.file-table .actions-column { width: 44px; padding: 10px 0; }
+.row-menu-trigger { width: 44px; height: 44px; text-align: center !important; }
+.row-menu { min-width: 224px; padding: 8px; border: 1px solid var(--rp-border); border-radius: 8px; background: var(--rp-surface); box-shadow: 0 4px 16px #0002; }
+.row-menu [role='menuitem'] { padding: 12px; min-height: 44px; border-radius: 4px; outline: none; cursor: pointer; }
+.row-menu [data-highlighted] { background: var(--rp-surface-subtle); outline: 3px solid var(--rp-focus); }
+.danger-text { color: var(--rp-danger); }
+.action-overlay { position: fixed; inset: 0; background: #0006; }
+.action-dialog { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 32px)); max-height: calc(100svh - 32px); overflow: auto; padding: 24px; border-radius: 12px; background: var(--rp-surface); }
+.action-dialog h2 { margin: 0 0 16px; font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
+.action-dialog p { font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.action-dialog form { margin-top: 16px; }
+.action-error { min-height: 20px; color: var(--rp-danger); margin: 8px 0; }
+.dialog-buttons { display: flex; gap: 12px; }
+.dialog-buttons > button { flex: 1; min-width: 0; height: 44px; }
+@media (max-width: 639px) { .file-table th:nth-child(2) { width: 68px; } .file-table td:nth-child(2) { padding-top: 26px; } }
 .file-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 24px; }
 .file-table th { text-align: left; font-size: 14px; padding: 12px 16px; color: var(--rp-text-muted); }
 .file-table th:last-child { width: 120px; text-align: right; }
