@@ -17,7 +17,7 @@ const messages: Record<Exclude<Message, null>, string> = {
 
 const unavailableHelp = 'Check RomPortal on your handheld. If it stopped, start it again and use the new address and PIN.'
 
-function App() {
+function App({ onSignedIn, expired = false }: { onSignedIn?: () => void; expired?: boolean }) {
   const [pin, setPin] = useState('')
   const [revealed, setRevealed] = useState(false)
   const [pending, setPending] = useState(false)
@@ -59,6 +59,8 @@ function App() {
     setMessage(null)
     const result = await submitPin(submittedPin)
     if (result.kind === 'success') {
+      setPin('')
+      if (onSignedIn) { onSignedIn(); return }
       window.location.assign('/')
       return
     }
@@ -91,6 +93,7 @@ function App() {
       <section className="login-panel" aria-labelledby="login-title">
         <h1 id="login-title">Open your folder.</h1>
         <p className="login-help">Enter the PIN shown in RomPortal on your handheld.</p>
+        {expired && <p role="status">Enter the PIN again to continue.</p>}
         <p className="host-address">{window.location.host}</p>
 
         <form onSubmit={handleSubmit} noValidate>

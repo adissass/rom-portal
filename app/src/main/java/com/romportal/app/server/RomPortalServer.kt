@@ -59,8 +59,9 @@ internal class RomPortalServer(
                     onTransferFinished = onTransferFinished,
                     healthSnapshot = { buildHealthSnapshot(startMs) },
                     loginPageHtml = { loginPageHtml() },
-                    fileManagerPageHtml = { fileManagerStubHtml() },
-                    webAsset = { path -> loadWebAsset(context, path) }
+                    fileManagerPageHtml = { loginPageHtml() },
+                    webAsset = { path -> loadWebAsset(context, path) },
+                    rootDisplayName = { fileOpsService.rootDisplayName() }
                 )
             )
         }.start(wait = false)

@@ -22,6 +22,8 @@ internal class FileOpsService(
     private val rootUriProvider: () -> String?,
     private val maxUploadBytes: Long? = null
 ) : FileOpsGateway {
+    fun rootDisplayName(): String = getRootDirectory().name ?: "Selected folder"
+
     override fun list(path: String?): Result<List<EntryInfo>> = runCatchingApi {
         val directory = resolveExisting(path, mustBeDirectory = true)
         directory.listFiles().map { doc ->

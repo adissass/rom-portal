@@ -94,7 +94,7 @@ export function mockApi(): Plugin {
           respond(
             res,
             200,
-            '<!doctype html><html lang="en"><meta charset="utf-8"><title>Preview signed in</title><h1>Preview signed in</h1><p>The React file manager is not built yet. The mock API is available at <a href="/api/list?path=">/api/list</a>.</p>',
+            '<!doctype html><meta http-equiv="refresh" content="0;url=/web/">',
             'text/html',
           )
           return
@@ -109,7 +109,7 @@ export function mockApi(): Plugin {
           if (path === null) {
             respond(res, 400, JSON.stringify({ error: 'Invalid path' }), 'application/json')
           } else if (Object.hasOwn(files, path)) {
-            respond(res, 200, JSON.stringify({ entries: files[path] }), 'application/json')
+            respond(res, 200, JSON.stringify({ entries: files[path], rootName: 'Emulator' }), 'application/json')
           } else {
             respond(res, 404, JSON.stringify({ error: 'Path not found' }), 'application/json')
           }

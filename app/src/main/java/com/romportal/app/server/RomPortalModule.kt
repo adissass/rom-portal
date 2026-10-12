@@ -32,7 +32,8 @@ internal data class RomPortalRouteConfig(
     val healthSnapshot: () -> HealthSnapshot,
     val loginPageHtml: () -> String,
     val fileManagerPageHtml: () -> String,
-    val webAsset: (String) -> WebAsset? = { null }
+    val webAsset: (String) -> WebAsset? = { null },
+    val rootDisplayName: () -> String = { "Selected folder" }
 )
 
 internal data class HealthSnapshot(
@@ -147,7 +148,7 @@ internal fun Application.configureRomPortalRoutes(config: RomPortalRouteConfig) 
                 result.onSuccess { entries ->
                     config.onAuthenticatedFileApiSuccess()
                     call.respondText(
-                        toEntriesJson(entries),
+                        toEntriesJson(entries).dropLast(1) + ",\"rootName\":\"${escapeJson(config.rootDisplayName())}\"}",
                         contentType = ContentType.Application.Json,
                         status = HttpStatusCode.OK
                     )
