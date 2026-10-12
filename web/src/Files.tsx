@@ -5,11 +5,14 @@ import { childPath, formatSize, listFolder } from './lib/files'
 import type { Entry } from './lib/files'
 import symbolLight from './assets/icons/symbol-web-light.svg'
 import symbolDark from './assets/icons/symbol-web-dark.svg'
+import folderIcon from './assets/icons/folder.svg'
+import fileIcon from './assets/icons/file.svg'
 
 export default function Files() {
   const [path, setPath] = useState(() => new URLSearchParams(location.search).get('path') ?? '')
   const [rows, setRows] = useState<Entry[]>([])
   const [rootName, setRootName] = useState('Selected folder')
+  const [loadedPath, setLoadedPath] = useState('')
   const [state, setState] = useState<'loading' | 'ready' | 'lost' | 'login' | 'error'>('loading')
   const [notice, setNotice] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -45,7 +48,7 @@ export default function Files() {
       }
       if (result.status !== 200) { setRows([]); setState('error'); return }
       authenticated.current = true
-      setRows(result.entries); setRootName(result.rootName); setState('ready')
+      setRows(result.entries); setLoadedPath(path); setRootName(result.rootName); setState('ready')
     }).catch(() => {
       if (!controller.signal.aborted) setState('lost')
     })
@@ -56,7 +59,7 @@ export default function Files() {
 
   if (state === 'login') return <Login expired={authenticated.current} onSignedIn={() => setAttempt(value => value + 1)} />
   const disabled = state !== 'ready'
-  const segments = path.split('/').filter(Boolean)
+  const segments = (state === 'lost' ? loadedPath : path).split('/').filter(Boolean)
   return <main className="login-page files-page">
     <header className="site-header"><div className="brand"><picture><source media="(prefers-color-scheme: dark)" srcSet={symbolDark}/><img src={symbolLight} alt="" className="brand-symbol"/></picture><span>Browser</span></div></header>
     <section className="files-panel">
@@ -69,7 +72,7 @@ export default function Files() {
       <div aria-live="polite">{notice && <p>{notice}</p>}{state === 'loading' && <p className="empty-state">Loading folder…</p>}</div>
       {state === 'lost' && <div role="alert"><h2>Connection lost</h2><p>Check that the host is running and both devices are on the same local network.</p><p>Last loaded view; actions unavailable.</p><Button onClick={() => setAttempt(value => value + 1)}>Try connection again</Button></div>}
       {state === 'error' && <div role="alert"><p>Couldn’t load this folder.</p><Button onClick={() => setAttempt(value => value + 1)}>Try connection again</Button></div>}
-      {state !== 'loading' && rows.length > 0 && <table className="file-table"><thead><tr><th>Name</th><th>Size</th></tr></thead><tbody>{rows.map(row => <tr key={row.name}><td><span aria-hidden="true" className="file-icon">{row.isDirectory ? '▱' : '▤'}</span>{row.isDirectory ? <button disabled={disabled} onClick={() => navigate(childPath(path, row.name))}>{row.name}</button> : <span>{row.name}</span>}</td><td title={row.sizeBytes === undefined ? undefined : `${row.sizeBytes} bytes; 1 KB = 1024 bytes`}>{row.isDirectory ? '' : formatSize(row.sizeBytes)}</td></tr>)}</tbody></table>}
+      {state !== 'loading' && rows.length > 0 && <table className="file-table"><thead><tr><th>Name</th><th>Size</th></tr></thead><tbody>{rows.map(row => <tr key={row.name}><td><img alt="" className="file-icon" src={row.isDirectory ? folderIcon : fileIcon}/>{row.isDirectory ? <button disabled={disabled} onClick={() => navigate(childPath(path, row.name))}>{row.name}</button> : <span>{row.name}</span>}</td><td title={row.sizeBytes === undefined ? undefined : `${row.sizeBytes} bytes; 1 KB = 1024 bytes`}>{row.isDirectory ? '' : formatSize(row.sizeBytes)}</td></tr>)}</tbody></table>}
       {state === 'ready' && rows.length === 0 && <p className="empty-state">This folder is empty.</p>}
       <p className="network-help">Showing only the selected folder.</p>
     </section>

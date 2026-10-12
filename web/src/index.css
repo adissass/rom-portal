@@ -108,6 +108,7 @@ label { display: block; margin-bottom: 8px; font-size: 14px; line-height: 20px; 
 .file-table td:last-child { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
 .file-table td:first-child { display: flex; gap: 16px; align-items: flex-start; }
 .file-table button { text-align: left; min-height: 44px; overflow-wrap: anywhere; }
-.file-icon { font-size: 24px; flex-shrink: 0; }
+.file-icon { width: 24px; height: 24px; flex-shrink: 0; }
+@media (prefers-color-scheme: dark) { .file-icon { filter: invert(1); } }
 .empty-state { text-align: center; padding: 56px 16px; font-size: 20px; }
 @media (max-width: 639px) { .file-table td { padding: 16px 8px; min-height: 72px; } .file-table th:last-child { width: 88px; } }
