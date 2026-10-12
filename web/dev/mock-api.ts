@@ -38,8 +38,10 @@ function isSignedIn(cookieHeader: string | undefined): boolean {
   return cookieHeader?.split(';').some((cookie) => cookie.trim() === 'rs_session=preview') ?? false
 }
 
-function normalizedPath(path: string): string | null {
-  const segments = path.split('/').filter(Boolean)
+export function normalizedPath(path: string): string | null {
+  const trimmed = path.trim()
+  if (trimmed.startsWith('/')) return null
+  const segments = trimmed.split('/').filter((segment) => segment.trim())
   if (segments.some((segment) => segment === '.' || segment === '..' || segment.includes('\\'))) return null
   return segments.join('/')
 }
