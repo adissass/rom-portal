@@ -27,6 +27,10 @@ function App({ onSignedIn, expired = false }: { onSignedIn?: () => void; expired
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    if (expired) inputRef.current?.focus()
+  }, [expired])
+
+  useEffect(() => {
     if (message !== 'validation' && message !== 'invalid') return
     inputRef.current?.focus()
     if (message === 'invalid') inputRef.current?.select()
@@ -93,7 +97,7 @@ function App({ onSignedIn, expired = false }: { onSignedIn?: () => void; expired
       <section className="login-panel" aria-labelledby="login-title">
         <h1 id="login-title">Open your folder.</h1>
         <p className="login-help">Enter the PIN shown in RomPortal on your handheld.</p>
-        {expired && <p role="status">Enter the PIN again to continue.</p>}
+        {expired && <p id="session-expired" role="status">Enter the PIN again to continue.</p>}
         <p className="host-address">{window.location.host}</p>
 
         <form onSubmit={handleSubmit} noValidate>
@@ -121,7 +125,7 @@ function App({ onSignedIn, expired = false }: { onSignedIn?: () => void; expired
               className="login-input"
               disabled={disabled}
               aria-invalid={hasError || undefined}
-              aria-describedby={message ? 'pin-message' : undefined}
+              aria-describedby={[expired && 'session-expired', message && 'pin-message'].filter(Boolean).join(' ') || undefined}
             />
             <Button
               type="button"
