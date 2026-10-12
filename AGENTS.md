@@ -13,14 +13,18 @@
 
 ## Issue and change workflow
 
-1. **PM → Backlog:** The PM creates the issue with the goal, scope, constraints, acceptance criteria, and design links when relevant. Backlog means the reviewer has not declared it ready.
-2. **Reviewer → Ready:** The reviewer checks the issue against the code and approved handoff. If a decision or artifact is missing, leave it in Backlog and record the exact gap on the issue. Move it to Ready only when a developer can implement it without inventing product behavior and each acceptance criterion can be verified.
-3. **Developer → In progress:** The developer takes a Ready issue, moves it to In progress, implements its scope, runs relevant checks, and provides screenshots or other evidence needed for review. Keep the issue and branch linked.
-4. **User → Design review:** For UI changes, move the issue to Design review when the implementation is ready for the user to inspect against approved references. The developer addresses feedback before code review. For changes without UI, proceed to Code Review.
-5. **Reviewer → Code Review:** The reviewer compares the change with the issue and the repo. Review correctness, security, accessibility, scope, conventions, and avoidable complexity. Report actionable findings with file and line references; the developer resolves them and requests another review.
-6. **User + reviewer → Verification:** Move the issue to Verification when design and code review findings are resolved. The user and reviewer check each acceptance criterion using the built artifact and recorded test results. Open the PR after joint verification. Move to Done only after the PR is merged and the accepted result is recorded.
+1. **Backlog:** The coordinator records scope, acceptance criteria, dependencies and design references on the issue. Resolve concrete gaps before implementation; request separate grooming only for uncertain contracts or consequential decisions.
+2. **In progress:** The developer implements one small product slice on a branch and opens a draft PR early. Link the issue, run relevant checks and capture screenshots for changed UI.
+3. **Review:** An independent reviewer checks the actual diff against scope and evidence. The coordinator routes findings back to the developer and requests focused re-review. Ask the user for relevant design/device checks or unresolved decisions; record completed acceptance evidence once.
+4. **Done:** The user retains final merge approval. Mark Done after the PR is merged and accepted evidence is recorded. Use `Closes #N` when the PR completes the issue; otherwise link the issue and leave it open.
 
-Set Backlog, Ready, In progress, Design review, Code Review, Verification, and Done on the **RomPortal UI Overhaul** project's Status field. Repository issue labels describe issue type and are not workflow status. If an issue is missing from the project, add it before moving its status.
+Use only Backlog, In progress, Review and Done on the **RomPortal UI Overhaul** project's Status field. Add missing issues to the project. Labels describe issue type, not workflow status.
+
+The coordinator owns dispatch and status reconciliation; the user should not relay routine messages. Keep one product slice active, with at most one independent admin task. Coordinate shared configuration/instruction edits with active work.
+
+Each dispatch/handoff names the exact issue/PR, branch/worktree, current commit, next action, relevant evidence and unresolved decisions. Read only the context needed for that task. Assign CI monitoring to one worker. Reuse passing checks for unchanged code; repeat checks when changes, failures or unresolved concerns justify them. A routine fix needs a builder pass, focused independent review and one consolidated merge summary.
+
+Use repository branch prefixes such as `sprint/`, `fix/`, `feat/`, `docs/` and `test/`; do not use `codex/`.
 
 ## Engineering boundaries
 
@@ -33,4 +37,4 @@ Set Backlog, Ready, In progress, Design review, Code Review, Verification, and D
 
 - Developer handoff: summarize changed behavior, deviations from the issue, commands and results, and manual UI checks. For browser changes run the web typecheck and build; for server or Android changes run affected unit tests and a debug build.
 - Reviewer handoff: separate issue/spec findings from code-quality findings. State what remains unverified, especially visual and interaction behavior that a passing build cannot prove.
-- Joint verification is complete when the user and reviewer have checked every acceptance criterion or explicitly recorded its exception. Keep the evidence with the issue or PR.
+- Record acceptance evidence and any explicitly accepted exceptions in the PR. The final handoff gives the user one merge recommendation with checks, relevant preview/screenshots and remaining limitations; avoid a separate routine verification ceremony.
